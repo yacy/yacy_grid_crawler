@@ -42,12 +42,21 @@ discovered from the transaction index.
 * if all status entries for a single `crawlid` are `indexed` then the crawl has been terminated.
 The Crawl process needs another database index, which contains the crawl description. The content must be almost the same as
 describe in http://www.yacy-websuche.de/wiki/index.php/Dev:APICrawler
+
 Every loader and parser microservice must read this crawl profile information. Because that information is required
 many times, we omit a request into the cawler index by adding the crawler profile into each contract of a crawl job in the
 crawler_pending and loader_pending queue.
+
 The crawl is therefore controlled by those queues:
 * `loader_pending` queue: entries which the yacy_grid_loader process reads. This process loads given resources and writes them to the asset storage.
 * `crawler_pending`queue: entries which the yacy_grid_crawler process reads. This process loads the content from the asset storage, parses the content and creates new loader_pending tasks.
+
+The required indexes are:
+* a crawl profile index
+* a transaction index which reflects the crawl status
+* a search index
+
+The microservices will create these indexes on their own using the MCP component.
 
 ## Installation: Download, Build, Run
 At this time, yacy_grid_crawler is not provided in compiled form, you easily build it yourself. It's not difficult and done in one minute! The source code is hosted at https://github.com/yacy/yacy_grid_crawler, you can download it and run loklak with:
