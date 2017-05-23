@@ -1,0 +1,3 @@
+[submodule "submodules/yacy_grid_mcp"]
+	path = submodules/yacy_grid_mcp
+	url = https://github.com/yacy/yacy_grid_mcp.git
