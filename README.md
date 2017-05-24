@@ -61,7 +61,7 @@ The microservices will create these indexes on their own using the MCP component
 ## Installation: Download, Build, Run
 At this time, yacy_grid_crawler is not provided in compiled form, you easily build it yourself. It's not difficult and done in one minute! The source code is hosted at https://github.com/yacy/yacy_grid_crawler, you can download it and run loklak with:
 
-    > git clone https://github.com/yacy/yacy_grid_crawler.git
+    > git clone --recursive https://github.com/yacy/yacy_grid_crawler.git
     > cd yacy_grid_crawler
     > gradle run
 
