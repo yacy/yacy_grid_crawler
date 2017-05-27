@@ -36,6 +36,7 @@ import net.yacy.grid.io.messages.MessageContainer;
 import net.yacy.grid.mcp.Data;
 import net.yacy.grid.mcp.Service;
 
+
 public class Crawler {
 
     private final static YaCyServices SERVICE = YaCyServices.crawler;
@@ -103,7 +104,7 @@ public class Crawler {
         brokerListener.start();
         List<Class<? extends Servlet>> services = new ArrayList<>();
         services.addAll(Arrays.asList(LOADER_SERVICES));
-        Service.runService(SERVICE, DATA_PATH, APP_PATH, services);
+        Service.runService(SERVICE, DATA_PATH, APP_PATH, null, services);
         brokerListener.terminate();
     }
     
