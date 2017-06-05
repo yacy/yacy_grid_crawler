@@ -32,8 +32,10 @@ import org.json.JSONTokener;
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.YaCyServices;
+import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
 import net.yacy.grid.io.messages.MessageContainer;
 import net.yacy.grid.mcp.Data;
+import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
 
 
@@ -45,8 +47,8 @@ public class Crawler {
  
     // define services
     @SuppressWarnings("unchecked")
-    public final static Class<? extends Servlet>[] LOADER_SERVICES = new Class[]{
-            // app services
+    public final static Class<? extends Servlet>[] CRAWLER_SERVICES = new Class[]{
+            CrawlerDefaultValuesService.class
     };
     
     /**
@@ -103,7 +105,8 @@ public class Crawler {
         BrokerListener brokerListener = new BrokerListener();
         brokerListener.start();
         List<Class<? extends Servlet>> services = new ArrayList<>();
-        services.addAll(Arrays.asList(LOADER_SERVICES));
+        services.addAll(Arrays.asList(MCP.MCP_SERVICES));
+        services.addAll(Arrays.asList(CRAWLER_SERVICES));
         Service.runService(SERVICE, DATA_PATH, APP_PATH, null, services);
         brokerListener.terminate();
     }
