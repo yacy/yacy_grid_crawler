@@ -24,13 +24,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import javax.servlet.Servlet;
 
@@ -135,25 +133,28 @@ public class Crawler {
   },
   "data": [{"collection": "test"}],
   "actions": [{
-    "type": "parser",
-    "queue": "yacyparser",
-    "sourceasset": "test3/yacy.net.warc.gz",
-    "targetasset": "test3/yacy.net.text.jsonlist",
-    "targetgraph": "test3/yacy.net.graph.jsonlist",
-    "actions": [
-      {
-      "type": "indexer",
-      "queue": "elasticsearch",
-      "targetindex": "webindex",
-      "targettype" : "common",
-      "sourceasset": "test3/yacy.net.text.jsonlist"
-      },
-      {
+    "type": "loader",
+    "queue": "webloader",
+    "urls": ["http://yacy.net"],
+    "collection": "test",
+    "targetasset": "test3/yacy.net.warc.gz",
+    "actions": [{
+      "type": "parser",
+      "queue": "yacyparser",
+      "sourceasset": "test3/yacy.net.warc.gz",
+      "targetasset": "test3/yacy.net.jsonlist",
+      "targetgraph": "test3/yacy.net.graph.json"
+      "actions": [{
+        "type": "indexer",
+        "queue": "elasticsearch",
+        "sourceasset": "test3/yacy.net.jsonlist"
+      },{
         "type": "crawler",
         "queue": "webcrawler",
-        "sourceasset": "test3/yacy.net.graph.jsonlist"
-      }
-    ]
+        "sourceasset": "test3/yacy.net.graph.json"
+      },
+      ]
+    }]
   }]
 }
      */
@@ -183,10 +184,38 @@ public class Crawler {
                 String[] urls = crawlingURL.split(" ");
                 // start urls are never checked against the double list
                 // we need file paths for the storage. So all we have here is the start url, and the id
+                // the id probably contains the date already
+                depth = 1;
                 
+                // construct actions back-to-front:
+                // last actions are indexer and crawler
+                JSONObject crawlerAction = new JSONObject();
+                JSONObject indexerAction = new JSONObject();
+                
+                // before that, we must do parsing
+                JSONObject parserAction = new JSONObject();
+                parserAction.put("actions", new JSONArray().put(indexerAction).put(crawlerAction));
+                
+                // first, we must load the page(s)
+                JSONObject loaderAction = new JSONObject();
+                loaderAction.put("actions", new JSONArray().put(parserAction));
+                
+                // finally, 
+                JSONArray actions = new JSONArray();
+                actions.put(loaderAction);
                 
             } else {
                 // this is a follow-up
+            	
+            	// check depth
+            	int crawlingDepth = crawl.getInt("crawlingDepth");
+            	if (depth > crawlingDepth) {
+            		// this is a leaf in the crawl tree (it does not mean that the crawl is finished)
+            		Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
+            		return true;
+            	}
+            	
+            	// load graph
                 String sourcegraph = action.getStringAttr("sourcegraph");
                 if (sourcegraph == null || sourcegraph.length() == 0) {
                     Data.logger.info("Fail: sourcegraph of Action is empty: " + action.toString());

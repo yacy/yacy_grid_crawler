@@ -46,9 +46,8 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         return "/yacy/grid/crawler/" + NAME + ".json";
     }
 
-    @Override
-    public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
-        JSONObject json = new JSONObject(true);
+    public static JSONObject crawlStartDefault() {
+    	JSONObject json = new JSONObject(true);
 
         json.put("crawlingMode", "url");
         json.put("crawlingURL", "");
@@ -80,8 +79,12 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         json.put("xsstopw", "off");
         json.put("collection", "user");
         json.put("agentName", "");
-
-        return new ServiceResponse(json);
+        return json;
+    }
+    
+    @Override
+    public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
+        return new ServiceResponse(crawlStartDefault());
     }
 
 }
