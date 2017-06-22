@@ -19,14 +19,21 @@
 
 package net.yacy.grid.crawler.api;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import javax.servlet.http.HttpServletResponse;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import ai.susi.mind.SusiAction;
+import ai.susi.mind.SusiThought;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
+import net.yacy.grid.mcp.Data;
 
 /**
  * 
@@ -49,8 +56,39 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
     @Override
     public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
-        JSONObject json = CrawlerDefaultValuesService.crawlStartDefault();
-        //for (String param: json.keySet()) json.put(param, call.get(param, json.get(param)));
+        JSONObject crawlstart = CrawlerDefaultValuesService.crawlStartDefaultClone();
+        for (String key: crawlstart.keySet()) {
+        	Object object = crawlstart.get(key);
+        	if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
+        	if (object instanceof Integer) crawlstart.put(key, call.get(key, crawlstart.getInt(key)));
+        	if (object instanceof Long) crawlstart.put(key, call.get(key, crawlstart.getLong(key)));
+        }
+        
+        // construct a crawl start message
+        SusiThought json = new SusiThought();
+        json.setData(new JSONArray().put(crawlstart));
+        String id = crawlstart.getString("crawlingURL") + System.currentTimeMillis();
+        String type = "crawler";
+        String queue = "webcrawler";
+        JSONObject action = new JSONObject()
+        	.put("type", type)
+        	.put("queue", queue)
+        	.put("id", id)
+        	.put("depth", 0);
+        json.addAction(new SusiAction(action));
+        
+        // put the crawl message on the queue
+        byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
+        try {
+			Data.gridBroker.send(type, queue, b);
+			json.put(ObjectAPIHandler.SUCCESS_KEY, true);
+		} catch (IOException e) {
+			e.printStackTrace();
+			json.put(ObjectAPIHandler.SUCCESS_KEY, false);
+			json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
+		}
+        
+        // finally add the crawl start on the queue
         return new ServiceResponse(json);
     }
 

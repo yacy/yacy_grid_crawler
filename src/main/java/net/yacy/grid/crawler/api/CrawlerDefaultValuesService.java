@@ -41,50 +41,54 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
     private static final long serialVersionUID = 8578474303031749879L;
     public static final String NAME = "defaultValues";
     
+    public static JSONObject defaultValues = new JSONObject(true);
+    static {
+        defaultValues.put("crawlingMode", "url");
+        defaultValues.put("crawlingURL", "");
+        defaultValues.put("sitemapURL", "");
+        defaultValues.put("crawlingFile", "");
+        defaultValues.put("crawlingDepth", 3);
+        defaultValues.put("crawlingDepthExtension", "");
+        defaultValues.put("range", "domain");
+        defaultValues.put("mustmatch", ".*");
+        defaultValues.put("mustnotmatch", "");
+        defaultValues.put("ipMustmatch", ".*");
+        defaultValues.put("ipMustnotmatch", "");
+        defaultValues.put("indexmustmatch", ".*");
+        defaultValues.put("indexmustnotmatch", "");
+        defaultValues.put("deleteold", "off");
+        defaultValues.put("deleteIfOlderNumber", 0);
+        defaultValues.put("deleteIfOlderUnit", "day");
+        defaultValues.put("recrawl", "nodoubles");
+        defaultValues.put("reloadIfOlderNumber", 0);
+        defaultValues.put("reloadIfOlderUnit", "day");
+        defaultValues.put("crawlingDomMaxCheck", "off");
+        defaultValues.put("crawlingDomMaxPages", 1000);
+        defaultValues.put("crawlingQ", "off");
+        defaultValues.put("directDocByURL", "off");
+        defaultValues.put("storeHTCache", "off");
+        defaultValues.put("cachePolicy", "if fresh");
+        defaultValues.put("indexText", "on");
+        defaultValues.put("indexMedia", "off");
+        defaultValues.put("xsstopw", "off");
+        defaultValues.put("collection", "user");
+        defaultValues.put("agentName", "");
+    }
+    
     @Override
     public String getAPIPath() {
         return "/yacy/grid/crawler/" + NAME + ".json";
     }
 
-    public static JSONObject crawlStartDefault() {
+    public static JSONObject crawlStartDefaultClone() {
     	JSONObject json = new JSONObject(true);
-
-        json.put("crawlingMode", "url");
-        json.put("crawlingURL", "");
-        json.put("sitemapURL", "");
-        json.put("crawlingFile", "");
-        json.put("crawlingDepth", 3);
-        json.put("crawlingDepthExtension", "");
-        json.put("range", "domain");
-        json.put("mustmatch", ".*");
-        json.put("mustnotmatch", "");
-        json.put("ipMustmatch", ".*");
-        json.put("ipMustnotmatch", "");
-        json.put("indexmustmatch", ".*");
-        json.put("indexmustnotmatch", "");
-        json.put("deleteold", "off");
-        json.put("deleteIfOlderNumber", 0);
-        json.put("deleteIfOlderUnit", "day");
-        json.put("recrawl", "nodoubles");
-        json.put("reloadIfOlderNumber", 0);
-        json.put("reloadIfOlderUnit", "day");
-        json.put("crawlingDomMaxCheck", "off");
-        json.put("crawlingDomMaxPages", 1000);
-        json.put("crawlingQ", "off");
-        json.put("directDocByURL", "off");
-        json.put("storeHTCache", "off");
-        json.put("cachePolicy", "if fresh");
-        json.put("indexText", "on");
-        json.put("indexMedia", "off");
-        json.put("xsstopw", "off");
-        json.put("collection", "user");
-        json.put("agentName", "");
-        return json;
+    	defaultValues.keySet().forEach(key -> json.put(key, defaultValues.get(key)));
+        return defaultValues;
     }
     
     @Override
     public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
-        return new ServiceResponse(crawlStartDefault());
+        return new ServiceResponse(defaultValues);
     }
 
 }
