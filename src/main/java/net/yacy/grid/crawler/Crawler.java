@@ -23,12 +23,15 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import javax.servlet.Servlet;
 
@@ -38,8 +41,11 @@ import org.json.JSONObject;
 import org.json.JSONTokener;
 
 import ai.susi.mind.SusiAction;
+import ai.susi.mind.SusiThought;
 import net.yacy.grid.YaCyServices;
+import net.yacy.grid.crawler.api.CrawlStartService;
 import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
+import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.mcp.AbstractBrokerListener;
@@ -47,6 +53,7 @@ import net.yacy.grid.mcp.BrokerListener;
 import net.yacy.grid.mcp.Data;
 import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
+import net.yacy.grid.tools.DateParser;
 import net.yacy.grid.tools.MultiProtocolURL;
 
 
@@ -59,7 +66,8 @@ public class Crawler {
     // define services
     @SuppressWarnings("unchecked")
     public final static Class<? extends Servlet>[] CRAWLER_SERVICES = new Class[]{
-            CrawlerDefaultValuesService.class
+            CrawlerDefaultValuesService.class,
+            CrawlStartService.class
     };
 
     private final static String[] FIELDS_IN_GRAPH = new String[]{
@@ -163,47 +171,43 @@ public class Crawler {
     public static class CrawlerListener extends AbstractBrokerListener implements BrokerListener {
 
         @Override
-        public boolean processAction(SusiAction action, JSONArray data) {
-            String id = action.getStringAttr("id");
+        public boolean processAction(SusiAction crawlaction, JSONArray data) {
+            String id = crawlaction.getStringAttr("id");
             if (id == null || id.length() == 0) {
-                Data.logger.info("Fail: Action does not have an id: " + action.toString());
+                Data.logger.info("Fail: Action does not have an id: " + crawlaction.toString());
                 return false;
             }
             JSONObject crawl = selectCrawlData(data, id);
             if (crawl == null) {
-                Data.logger.info("Fail: ID of Action not found in data: " + action.toString());
+                Data.logger.info("Fail: ID of Action not found in data: " + crawlaction.toString());
                 return false;
             }
             
-            int depth = action.getIntAttr("depth");
+            int depth = crawlaction.getIntAttr("depth");
             if (depth == 0) {
                 // this is a crawl start
                 // construct the loading, parsing, indexing action
                 // we take the start url from the data object
-                String crawlingURL = crawl.getString("crawlingURL");
-                String[] urls = crawlingURL.split(" ");
-                // start urls are never checked against the double list
-                // we need file paths for the storage. So all we have here is the start url, and the id
-                // the id probably contains the date already
-                depth = 1;
+                //CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawl.getString("crawlingURL"));
+                //JSONArray urlArray = crawlstartURLs.getURLs();
+                JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
                 
-                // construct actions back-to-front:
-                // last actions are indexer and crawler
-                JSONObject crawlerAction = new JSONObject();
-                JSONObject indexerAction = new JSONObject();
+                // first, we must load the page(s): construct a loader message
+                SusiThought json = new SusiThought();
+                json.setData(data);
+                JSONObject loaderAction = newLoaderAction(id, urlArray, 0, 0); // action includes whole hierarchy of follow-up actions
+                json.addAction(new SusiAction(loaderAction));
                 
-                // before that, we must do parsing
-                JSONObject parserAction = new JSONObject();
-                parserAction.put("actions", new JSONArray().put(indexerAction).put(crawlerAction));
-                
-                // first, we must load the page(s)
-                JSONObject loaderAction = new JSONObject();
-                loaderAction.put("actions", new JSONArray().put(parserAction));
-                
-                // finally, 
-                JSONArray actions = new JSONArray();
-                actions.put(loaderAction);
-                
+                // put a loader message on the queue
+                byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
+                try {
+                    Data.gridBroker.send("loader", "webloader", b);
+                    json.put(ObjectAPIHandler.SUCCESS_KEY, true);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    json.put(ObjectAPIHandler.SUCCESS_KEY, false);
+                    json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
+                }
             } else {
                 // this is a follow-up
             	
@@ -216,9 +220,9 @@ public class Crawler {
             	}
             	
             	// load graph
-                String sourcegraph = action.getStringAttr("sourcegraph");
+                String sourcegraph = crawlaction.getStringAttr("sourcegraph");
                 if (sourcegraph == null || sourcegraph.length() == 0) {
-                    Data.logger.info("Fail: sourcegraph of Action is empty: " + action.toString());
+                    Data.logger.info("Fail: sourcegraph of Action is empty: " + crawlaction.toString());
                     return false;
                 }
                 try {
@@ -232,30 +236,78 @@ public class Crawler {
                         
                         //String url = json.getString(WebMapping.url_s.name());
                         Set<MultiProtocolURL> graph = new HashSet<>();
-                        if (json.has(WebMapping.canonical_s.name())) graph.add(new MultiProtocolURL(json.getString(WebMapping.canonical_s.name())));
-                        for (String field: FIELDS_IN_GRAPH) {
+                        if (json.has(WebMapping.canonical_s.name())) try {
+                            graph.add(new MultiProtocolURL(json.getString(WebMapping.canonical_s.name())));
+                        } catch (MalformedURLException e) {
+                            e.printStackTrace();
+                        }
+                        fieldloop: for (String field: FIELDS_IN_GRAPH) {
                             if (json.has(field)) {
                                 JSONArray a = json.getJSONArray(field);
-                                for (int i = 0; i < a.length(); i++) graph.add(new MultiProtocolURL(a.getString(i)));
+                                for (int i = 0; i < a.length(); i++) try {
+                                    graph.add(new MultiProtocolURL(a.getString(i)));
+                                } catch (MalformedURLException e) {
+                                    e.printStackTrace();
+                                    continue fieldloop;
+                                }
                             }
                         }
                         
-                        // sort out doubles
-                        List<MultiProtocolURL> next = new ArrayList<>();
+                        // sort out doubles and apply filters
+                        List<String> nextList = new ArrayList<>();
+                        Pattern mustmatch = Pattern.compile(crawlaction.getStringAttr("mustmatch"));
+                        Pattern mustnotmatch = Pattern.compile(crawlaction.getStringAttr("mustnotmatch"));
                         graph.forEach(url -> {
                             if (!Crawler.doubles.contains(url)) {
                                 Crawler.doubles.add(url);
-                                next.add(url);
+                                
+                                // check if the url shall be loaded using the constraints
+                                String u = url.toNormalform(true);
+                                if (mustmatch.matcher(u).matches() &&
+                                    !mustnotmatch.matcher(u).matches()) {
+                                    // add url to next stack
+                                    nextList.add(u);
+                                }
                             }
                         });
                         
+                        // create partitions
+                        List<JSONArray> partitions = new ArrayList<>();
+                        int maxURLsPerPartition = 2;
+                        nextList.forEach(url -> {
+                            int c = partitions.size();
+                            if (c == 0 || partitions.get(c - 1).length() >= maxURLsPerPartition) {
+                                partitions.add(new JSONArray());
+                                c++;
+                            }
+                            partitions.get(c - 1).put(url);
+                        });
                         
+                        
+                        // create follow-up crawl to next depth
+                        for (int pc = 0; pc < partitions.size(); pc++) {
+                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, pc); // action includes whole hierarchy of follow-up actions
+                            SusiThought nextjson = new SusiThought()
+                                .setData(data)
+                                .addAction(new SusiAction(loaderAction));
+                            
+                            // put a loader message on the queue
+                            byte[] b = nextjson.toString().getBytes(StandardCharsets.UTF_8);
+                            try {
+                                Data.gridBroker.send("loader", "webloader", b);
+                                json.put(ObjectAPIHandler.SUCCESS_KEY, true);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                                json.put(ObjectAPIHandler.SUCCESS_KEY, false);
+                                json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
+                            }
+                        };
                     } catch (JSONException je) {}
                     
                     Data.logger.info("processed message from queue and loaded graph " + sourcegraph);
                     return true;
                 } catch (IOException e) {
-                    Data.logger.info("Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + action.toString(), e);
+                    Data.logger.info("Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
                     return false;
                 }
             }
@@ -272,6 +324,79 @@ public class Crawler {
         }
     }
 
+    public static JSONObject newLoaderAction(
+            String id,
+            JSONArray urls,
+            int depth,
+            int partition) {
+        String namestub = id + "/d" + depth + "-p" + partition;
+        String warcasset =  namestub + ".warc.gz";
+        String jsonasset =  namestub + ".jsonlist";
+        String graphasset =  namestub + ".graph.json";
+        
+        JSONObject loaderAction = new JSONObject(true)
+            .put("type", "loader")
+            .put("queue", "webloader")
+            .put("id", id)
+            .put("urls", urls)
+            .put("targetasset", warcasset)
+            .put("actions", new JSONArray().put(new JSONObject(true)
+                .put("type", "parser")
+                .put("queue", "yacyparser")
+                .put("id", id)
+                .put("sourceasset", warcasset)
+                .put("targetasset", jsonasset)
+                .put("targetgraph", graphasset)
+                .put("actions", new JSONArray().put(new JSONObject(true)
+                    .put("type", "indexer")
+                    .put("queue", "elasticsearch")
+                    .put("id", id)
+                    .put("sourceasset", jsonasset)
+                 ).put(newCrawlerAction(id, depth + 1)
+                    .put("sourcegraph", graphasset)
+                 ))));
+        return loaderAction;
+    }
+
+    public static JSONObject newCrawlerAction(String id, int depth) {
+        JSONObject crawlerAction = new JSONObject(true)
+            .put("type", "crawler")
+            .put("queue", "webcrawler")
+            .put("id", id)
+            .put("depth", depth);
+        return crawlerAction;
+    }
+    
+    public static class CrawlstartURLs {
+        
+        JSONArray crawlingURLArray;
+        String id = "";
+        
+        public CrawlstartURLs(String crawlingURLsString) {
+            String[] crawlingURLs = crawlingURLsString.split(" ");
+            this.crawlingURLArray = new JSONArray();
+            this.id = "";
+            for (String u: crawlingURLs) {
+                try {
+                    MultiProtocolURL url = new MultiProtocolURL(u);
+                    this.crawlingURLArray.put(url.toNormalform(true));
+                    this.id = this.id + url.getHost() + "-";
+                } catch (MalformedURLException e) {
+                    e.printStackTrace();
+                }
+            }
+            id = id + DateParser.secondDateFormat.format(new Date()).replace(':', '-').replace(' ', '-');
+        }
+        
+        public String getId() {
+            return this.id;
+        }
+        
+        public JSONArray getURLs() {
+            return this.crawlingURLArray;
+        }
+    }
+    
     public static void main(String[] args) {
         BrokerListener brokerListener = new CrawlerListener();
         new Thread(brokerListener).start();

@@ -51,7 +51,7 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         defaultValues.put("crawlingDepthExtension", "");
         defaultValues.put("range", "domain");
         defaultValues.put("mustmatch", ".*");
-        defaultValues.put("mustnotmatch", "");
+        defaultValues.put("mustnotmatch", ".*\\.(js|css|jpg|jpeg|png|dmg|mpg|mpeg|zip|gz|exe|pkg)");
         defaultValues.put("ipMustmatch", ".*");
         defaultValues.put("ipMustnotmatch", "");
         defaultValues.put("indexmustmatch", ".*");

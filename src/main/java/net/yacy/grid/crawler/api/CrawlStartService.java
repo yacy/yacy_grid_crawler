@@ -29,6 +29,7 @@ import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
+import net.yacy.grid.crawler.Crawler.CrawlstartURLs;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
@@ -38,10 +39,7 @@ import net.yacy.grid.mcp.Data;
 /**
  * 
  * Test URL:
- * http://localhost:8300/yacy/grid/crawler/crawlStart.json?url=yacy.net
- * 
- * Test command:
- * curl http://localhost:8300/yacy/grid/crawler/crawlStart.json
+ * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net
  */
 public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
@@ -64,16 +62,20 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         	if (object instanceof Long) crawlstart.put(key, call.get(key, crawlstart.getLong(key)));
         }
         
+        // set the crawl id
+        CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawlstart.getString("crawlingURL"));
+        crawlstart.put("id", crawlstartURLs.getId());
+        crawlstart.put("crawlingURLs", crawlstartURLs.getURLs());
+        
         // construct a crawl start message
         SusiThought json = new SusiThought();
         json.setData(new JSONArray().put(crawlstart));
-        String id = crawlstart.getString("crawlingURL") + System.currentTimeMillis();
         String type = "crawler";
         String queue = "webcrawler";
         JSONObject action = new JSONObject()
         	.put("type", type)
         	.put("queue", queue)
-        	.put("id", id)
+        	.put("id", crawlstart.getString("id"))
         	.put("depth", 0);
         json.addAction(new SusiAction(action));
         
