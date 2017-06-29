@@ -59,9 +59,8 @@ import net.yacy.grid.tools.MultiProtocolURL;
 
 public class Crawler {
 
-    private final static YaCyServices SERVICE = YaCyServices.crawler;
+    private final static YaCyServices CRAWLER_SERVICE = YaCyServices.crawler;
     private final static String DATA_PATH = "data";
-    private final static String APP_PATH = "crawler";
  
     // define services
     @SuppressWarnings("unchecked")
@@ -170,6 +169,10 @@ public class Crawler {
     
     public static class CrawlerListener extends AbstractBrokerListener implements BrokerListener {
 
+        public CrawlerListener(YaCyServices service) {
+             super(service, Runtime.getRuntime().availableProcessors());
+        }
+        
         @Override
         public boolean processAction(SusiAction crawlaction, JSONArray data) {
             String id = crawlaction.getStringAttr("id");
@@ -398,12 +401,18 @@ public class Crawler {
     }
     
     public static void main(String[] args) {
-        BrokerListener brokerListener = new CrawlerListener();
-        new Thread(brokerListener).start();
+        // initialize environment variables
         List<Class<? extends Servlet>> services = new ArrayList<>();
         services.addAll(Arrays.asList(MCP.MCP_SERVICES));
         services.addAll(Arrays.asList(CRAWLER_SERVICES));
-        Service.runService(SERVICE, DATA_PATH, APP_PATH, null, services);
+        Service.initEnvironment(CRAWLER_SERVICE, services, DATA_PATH);
+
+        // start listener
+        BrokerListener brokerListener = new CrawlerListener(CRAWLER_SERVICE);
+        new Thread(brokerListener).start();
+
+        // start server
+        Service.runService(null);
         brokerListener.terminate();
     }
     
