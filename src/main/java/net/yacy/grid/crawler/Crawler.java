@@ -30,11 +30,14 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import javax.servlet.Servlet;
 
+import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -78,7 +81,7 @@ public class Crawler {
             WebMapping.iframes_sxt.name()
     };
     
-    private final static Set<MultiProtocolURL> doubles = new HashSet<>();
+    private final static Map<String, Set<MultiProtocolURL>> doubles = new ConcurrentHashMap<>();
     /**
      * broker listener, takes process messages from the queue "crawler", "webcrawler"
      * i.e. test with:
@@ -202,14 +205,11 @@ public class Crawler {
                 json.addAction(new SusiAction(loaderAction));
                 
                 // put a loader message on the queue
-                byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
                 try {
                     Data.gridBroker.send("loader", "webloader", b);
-                    json.put(ObjectAPIHandler.SUCCESS_KEY, true);
                 } catch (IOException e) {
                     e.printStackTrace();
-                    json.put(ObjectAPIHandler.SUCCESS_KEY, false);
-                    json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
                 }
             } else {
                 // this is a follow-up
@@ -258,11 +258,13 @@ public class Crawler {
                         
                         // sort out doubles and apply filters
                         List<String> nextList = new ArrayList<>();
-                        Pattern mustmatch = Pattern.compile(crawlaction.getStringAttr("mustmatch"));
-                        Pattern mustnotmatch = Pattern.compile(crawlaction.getStringAttr("mustnotmatch"));
+                        Pattern mustmatch = Pattern.compile(crawl.getString("mustmatch"));
+                        Pattern mustnotmatch = Pattern.compile(crawl.getString("mustnotmatch"));
+                        if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
+                        final Set<MultiProtocolURL> doubleset = doubles.get(id);
                         graph.forEach(url -> {
-                            if (!Crawler.doubles.contains(url)) {
-                                Crawler.doubles.add(url);
+                            if (!doubleset.contains(url)) {
+                                doubleset.add(url);
                                 
                                 // check if the url shall be loaded using the constraints
                                 String u = url.toNormalform(true);
@@ -295,7 +297,7 @@ public class Crawler {
                                 .addAction(new SusiAction(loaderAction));
                             
                             // put a loader message on the queue
-                            byte[] b = nextjson.toString().getBytes(StandardCharsets.UTF_8);
+                            byte[] b = nextjson.toString(2).getBytes(StandardCharsets.UTF_8);
                             try {
                                 Data.gridBroker.send("loader", "webloader", b);
                                 json.put(ObjectAPIHandler.SUCCESS_KEY, true);
