@@ -336,8 +336,8 @@ public class Crawler {
             int partition) {
         String namestub = id + "/d" + depth + "-p" + partition;
         String warcasset =  namestub + ".warc.gz";
-        String jsonasset =  namestub + ".jsonlist";
-        String graphasset =  namestub + ".graph.json";
+        String webasset =  namestub + ".web.jsonlist";
+        String graphasset =  namestub + ".graph.jsonlist";
         
         JSONObject loaderAction = new JSONObject(true)
             .put("type", "loader")
@@ -350,13 +350,13 @@ public class Crawler {
                 .put("queue", "yacyparser")
                 .put("id", id)
                 .put("sourceasset", warcasset)
-                .put("targetasset", jsonasset)
+                .put("targetasset", webasset)
                 .put("targetgraph", graphasset)
                 .put("actions", new JSONArray().put(new JSONObject(true)
                     .put("type", "indexer")
                     .put("queue", "elasticsearch")
                     .put("id", id)
-                    .put("sourceasset", jsonasset)
+                    .put("sourceasset", webasset)
                  ).put(newCrawlerAction(id, depth + 1)
                     .put("sourcegraph", graphasset)
                  ))));
