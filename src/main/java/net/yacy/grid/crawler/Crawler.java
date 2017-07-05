@@ -23,11 +23,13 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -197,7 +199,8 @@ public class Crawler {
                 // first, we must load the page(s): construct a loader message
                 SusiThought json = new SusiThought();
                 json.setData(data);
-                JSONObject loaderAction = newLoaderAction(id, urlArray, 0, 0); // action includes whole hierarchy of follow-up actions
+                Date timestamp = new Date();
+                JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
                 json.addAction(new SusiAction(loaderAction));
                 
                 // put a loader message on the queue
@@ -295,8 +298,9 @@ public class Crawler {
                         
                         
                         // create follow-up crawl to next depth
+                        Date timestamp = new Date();
                         for (int pc = 0; pc < partitions.size(); pc++) {
-                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, pc); // action includes whole hierarchy of follow-up actions
+                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, timestamp, pc); // action includes whole hierarchy of follow-up actions
                             SusiThought nextjson = new SusiThought()
                                 .setData(data)
                                 .addAction(new SusiAction(loaderAction));
@@ -334,12 +338,16 @@ public class Crawler {
         }
     }
 
+    private final static String PATTERN_TIMEF = "MMddHHmmssSSS"; 
+    public final static SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US);
+    
     public static JSONObject newLoaderAction(
             String id,
             JSONArray urls,
             int depth,
+            Date timestamp,
             int partition) {
-        String namestub = id + "/d" + depth + "-p" + partition;
+        String namestub = id + "/d" + intf(depth) + "-t" + FORMAT_TIMEF.format(timestamp) + "-p" + intf(partition);
         String warcasset =  namestub + ".warc.gz";
         String webasset =  namestub + ".web.jsonlist";
         String graphasset =  namestub + ".graph.jsonlist";
@@ -366,6 +374,12 @@ public class Crawler {
                     .put("sourcegraph", graphasset)
                  ))));
         return loaderAction;
+    }
+    
+    private final static String intf(int i) {
+    	String s = Integer.toString(i);
+    	while (s.length() < 3) s = '0' + s;
+    	return s;
     }
 
     public static JSONObject newCrawlerAction(String id, int depth) {
