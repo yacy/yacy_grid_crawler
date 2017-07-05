@@ -19,10 +19,8 @@
 
 package net.yacy.grid.crawler;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -39,9 +37,7 @@ import javax.servlet.Servlet;
 
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.JSONTokener;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
@@ -57,8 +53,8 @@ import net.yacy.grid.mcp.Data;
 import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
 import net.yacy.grid.tools.DateParser;
+import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
-
 
 public class Crawler {
 
@@ -229,12 +225,21 @@ public class Crawler {
                     return false;
                 }
                 try {
-                    Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
-                    ByteArrayInputStream bais = new ByteArrayInputStream(graphasset.getPayload());
-                    BufferedReader br = new BufferedReader(new InputStreamReader(bais, StandardCharsets.UTF_8));
-                    String line;
-                    graphloop: while ((line = br.readLine()) != null) try {
-                        JSONObject json = new JSONObject(new JSONTokener(line));
+                	JSONList jsonlist = null;
+                	if (crawlaction.hasAsset(sourcegraph)) {
+                		jsonlist = crawlaction.getJSONListAsset(sourcegraph);
+                	}
+                	if (jsonlist == null) try {
+                		Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
+                    	byte[] graphassetbytes = graphasset.getPayload();
+                    	jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
+                    } catch (IOException e) {
+                		e.printStackTrace();
+                		Data.logger.warn("could not read asset from storage: " + sourcegraph);
+                		return false;
+                	}
+                	graphloop: for (int line = 0; line < jsonlist.length(); line++) {
+                		JSONObject json = jsonlist.get(line);
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
                         
                         //String url = json.getString(WebMapping.url_s.name());
@@ -307,11 +312,11 @@ public class Crawler {
                                 json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
                             }
                         };
-                    } catch (JSONException je) {}
+                    }
                     
                     Data.logger.info("processed message from queue and loaded graph " + sourcegraph);
                     return true;
-                } catch (IOException e) {
+                } catch (Throwable e) {
                     Data.logger.info("Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
                     return false;
                 }
