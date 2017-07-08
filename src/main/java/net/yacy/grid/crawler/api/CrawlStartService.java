@@ -29,11 +29,14 @@ import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
+import net.yacy.grid.QueueName;
+import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.Crawler.CrawlstartURLs;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
+import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
 
 /**
@@ -70,19 +73,18 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         // construct a crawl start message
         SusiThought json = new SusiThought();
         json.setData(new JSONArray().put(crawlstart));
-        String type = "crawler";
-        String queue = "webcrawler";
-        JSONObject action = new JSONObject()
-        	.put("type", type)
-        	.put("queue", queue)
-        	.put("id", crawlstart.getString("id"))
-        	.put("depth", 0);
-        json.addAction(new SusiAction(action));
-        
-        // put the crawl message on the queue
-        byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
         try {
-			Data.gridBroker.send(type, queue, b);
+            QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, crawlstartURLs.getId());
+            JSONObject action = new JSONObject()
+            	.put("type", YaCyServices.crawler.name())
+            	.put("queue", queueName.name())
+            	.put("id", crawlstart.getString("id"))
+            	.put("depth", 0);
+            json.addAction(new SusiAction(action));
+            
+            // put the crawl message on the queue
+            byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
+            Data.gridBroker.send(YaCyServices.crawler, queueName, b);
 			json.put(ObjectAPIHandler.SUCCESS_KEY, true);
 		} catch (IOException e) {
 			e.printStackTrace();

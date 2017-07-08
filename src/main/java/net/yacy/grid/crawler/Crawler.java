@@ -43,12 +43,14 @@ import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
+import net.yacy.grid.QueueName;
 import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.api.CrawlStartService;
 import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.WebMapping;
+import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.AbstractBrokerListener;
 import net.yacy.grid.mcp.BrokerListener;
 import net.yacy.grid.mcp.Data;
@@ -200,13 +202,14 @@ public class Crawler {
                 SusiThought json = new SusiThought();
                 json.setData(data);
                 Date timestamp = new Date();
-                JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
-                json.addAction(new SusiAction(loaderAction));
                 
                 // put a loader message on the queue
                 byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
                 try {
-                    Data.gridBroker.send("loader", "webloader", b);
+                    JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
+                    json.addAction(new SusiAction(loaderAction));
+                    QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
+                    Data.gridBroker.send(YaCyServices.loader, queueName, b);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -308,7 +311,8 @@ public class Crawler {
                             // put a loader message on the queue
                             byte[] b = nextjson.toString(2).getBytes(StandardCharsets.UTF_8);
                             try {
-                                Data.gridBroker.send("loader", "webloader", b);
+                                QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
+                                Data.gridBroker.send(YaCyServices.loader, queueName, b);
                                 json.put(ObjectAPIHandler.SUCCESS_KEY, true);
                             } catch (IOException e) {
                                 e.printStackTrace();
@@ -346,28 +350,31 @@ public class Crawler {
             JSONArray urls,
             int depth,
             Date timestamp,
-            int partition) {
+            int partition) throws IOException {
         String namestub = id + "/d" + intf(depth) + "-t" + FORMAT_TIMEF.format(timestamp) + "-p" + intf(partition);
         String warcasset =  namestub + ".warc.gz";
         String webasset =  namestub + ".web.jsonlist";
         String graphasset =  namestub + ".graph.jsonlist";
-        
+
+        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
+        QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.LOOKUP, id);
+        QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.LOOKUP, id);
         JSONObject loaderAction = new JSONObject(true)
-            .put("type", "loader")
-            .put("queue", "webloader")
+            .put("type", YaCyServices.loader.name())
+            .put("queue", loaderQueueName.name())
             .put("id", id)
             .put("urls", urls)
             .put("targetasset", warcasset)
             .put("actions", new JSONArray().put(new JSONObject(true)
-                .put("type", "parser")
-                .put("queue", "yacyparser")
+                .put("type", YaCyServices.parser.name())
+                .put("queue", parserQueueName.name())
                 .put("id", id)
                 .put("sourceasset", warcasset)
                 .put("targetasset", webasset)
                 .put("targetgraph", graphasset)
                 .put("actions", new JSONArray().put(new JSONObject(true)
-                    .put("type", "indexer")
-                    .put("queue", "elasticsearch")
+                    .put("type", YaCyServices.indexer.name())
+                    .put("queue", indexerQueueName.name())
                     .put("id", id)
                     .put("sourceasset", webasset)
                  ).put(newCrawlerAction(id, depth + 1)
@@ -382,10 +389,11 @@ public class Crawler {
     	return s;
     }
 
-    public static JSONObject newCrawlerAction(String id, int depth) {
+    public static JSONObject newCrawlerAction(String id, int depth) throws IOException {
+        QueueName crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, id);
         JSONObject crawlerAction = new JSONObject(true)
-            .put("type", "crawler")
-            .put("queue", "webcrawler")
+            .put("type", YaCyServices.crawler.name())
+            .put("queue", crawlerQueueName.name())
             .put("id", id)
             .put("depth", depth);
         return crawlerAction;
