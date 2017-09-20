@@ -204,10 +204,10 @@ public class Crawler {
                 Date timestamp = new Date();
                 
                 // put a loader message on the queue
-                byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
                 try {
                     JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
                     json.addAction(new SusiAction(loaderAction));
+                    byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
                     QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
                     Data.gridBroker.send(YaCyServices.loader, queueName, b);
                 } catch (IOException e) {
