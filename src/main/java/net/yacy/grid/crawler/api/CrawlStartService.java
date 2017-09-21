@@ -74,7 +74,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         SusiThought json = new SusiThought();
         json.setData(new JSONArray().put(crawlstart));
         try {
-            QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, crawlstartURLs.getId());
+            QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, crawlstartURLs.getHashKey());
             JSONObject action = new JSONObject()
             	.put("type", YaCyServices.crawler.name())
             	.put("queue", queueName.name())

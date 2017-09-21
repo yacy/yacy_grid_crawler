@@ -39,11 +39,13 @@ import javax.servlet.Servlet;
 
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.QueueName;
+import net.yacy.grid.Services;
 import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.api.CrawlStartService;
 import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
@@ -197,6 +199,10 @@ public class Crawler {
                 //CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawl.getString("crawlingURL"));
                 //JSONArray urlArray = crawlstartURLs.getURLs();
                 JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
+                String hashKey =  "";
+                try {
+                    hashKey = new MultiProtocolURL(urlArray.getString(0)).getHost();
+                } catch (MalformedURLException | JSONException e1) {}
                 
                 // first, we must load the page(s): construct a loader message
                 SusiThought json = new SusiThought();
@@ -208,7 +214,7 @@ public class Crawler {
                 try {
                     JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
                     json.addAction(new SusiAction(loaderAction));
-                    QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
+                    QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
                     Data.gridBroker.send(YaCyServices.loader, queueName, b);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -311,8 +317,9 @@ public class Crawler {
                             // put a loader message on the queue
                             byte[] b = nextjson.toString(2).getBytes(StandardCharsets.UTF_8);
                             try {
-                                QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
-                                Data.gridBroker.send(YaCyServices.loader, queueName, b);
+                                Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
+                                QueueName queueName = new QueueName(loaderAction.getString("queue"));
+                                Data.gridBroker.send(serviceName, queueName, b);
                                 json.put(ObjectAPIHandler.SUCCESS_KEY, true);
                             } catch (IOException e) {
                                 e.printStackTrace();
@@ -355,10 +362,11 @@ public class Crawler {
         String warcasset =  namestub + ".warc.gz";
         String webasset =  namestub + ".web.jsonlist";
         String graphasset =  namestub + ".graph.jsonlist";
+        String hashKey = new MultiProtocolURL(urls.getString(0)).getHost();
 
-        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, id);
-        QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.LOOKUP, id);
-        QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.LOOKUP, id);
+        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
+        QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.LOOKUP, hashKey);
+        QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.LOOKUP, hashKey);
         JSONObject loaderAction = new JSONObject(true)
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())
@@ -377,7 +385,7 @@ public class Crawler {
                     .put("queue", indexerQueueName.name())
                     .put("id", id)
                     .put("sourceasset", webasset)
-                 ).put(newCrawlerAction(id, depth + 1)
+                 ).put(newCrawlerAction(id, depth + 1, hashKey)
                     .put("sourcegraph", graphasset)
                  ))));
         return loaderAction;
@@ -389,8 +397,8 @@ public class Crawler {
     	return s;
     }
 
-    public static JSONObject newCrawlerAction(String id, int depth) throws IOException {
-        QueueName crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, id);
+    public static JSONObject newCrawlerAction(String id, int depth, String hashKey) throws IOException {
+        QueueName crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, hashKey);
         JSONObject crawlerAction = new JSONObject(true)
             .put("type", YaCyServices.crawler.name())
             .put("queue", crawlerQueueName.name())
@@ -403,16 +411,19 @@ public class Crawler {
         
         JSONArray crawlingURLArray;
         String id = "";
+        String hashKey = "";
         
         public CrawlstartURLs(String crawlingURLsString) {
             String[] crawlingURLs = crawlingURLsString.split(" ");
             this.crawlingURLArray = new JSONArray();
             this.id = "";
+            int c = 0;
             for (String u: crawlingURLs) {
                 try {
                     MultiProtocolURL url = new MultiProtocolURL(u);
                     this.crawlingURLArray.put(url.toNormalform(true));
                     this.id = this.id + url.getHost() + "-";
+                    if (c++ == 0) this.hashKey = url.getHost();
                 } catch (MalformedURLException e) {
                     e.printStackTrace();
                 }
@@ -426,6 +437,10 @@ public class Crawler {
         
         public JSONArray getURLs() {
             return this.crawlingURLArray;
+        }
+        
+        public String getHashKey() {
+            return this.hashKey;
         }
     }
     
