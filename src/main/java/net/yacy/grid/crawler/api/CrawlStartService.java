@@ -59,10 +59,18 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
     public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
         JSONObject crawlstart = CrawlerDefaultValuesService.crawlStartDefaultClone();
         for (String key: crawlstart.keySet()) {
-        	Object object = crawlstart.get(key);
-        	if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
-        	if (object instanceof Integer) crawlstart.put(key, call.get(key, crawlstart.getInt(key)));
-        	if (object instanceof Long) crawlstart.put(key, call.get(key, crawlstart.getLong(key)));
+            	Object object = crawlstart.get(key);
+            	if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
+            	else if (object instanceof Integer) crawlstart.put(key, call.get(key, crawlstart.getInt(key)));
+            else if (object instanceof Long) crawlstart.put(key, call.get(key, crawlstart.getLong(key)));
+            else if (object instanceof JSONArray) {
+                JSONArray a = crawlstart.getJSONArray(key);
+                Object cv = call.get(key);
+                if (cv != null) crawlstart.put(key, cv);
+            }
+            	else {
+            	    System.out.println("unrecognized type: " + object.getClass().toString());
+            	}
         }
         
         // set the crawl id

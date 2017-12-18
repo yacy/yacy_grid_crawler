@@ -414,7 +414,8 @@ public class Crawler {
         String hashKey = "";
         
         public CrawlstartURLs(String crawlingURLsString) {
-            String[] crawlingURLs = crawlingURLsString.split(" ");
+            crawlingURLsString = crawlingURLsString.replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
+            String[] crawlingURLs = crawlingURLsString.split("\n");
             this.crawlingURLArray = new JSONArray();
             this.id = "";
             int c = 0;
