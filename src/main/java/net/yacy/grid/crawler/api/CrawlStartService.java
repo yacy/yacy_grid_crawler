@@ -21,6 +21,7 @@ package net.yacy.grid.crawler.api;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -31,13 +32,15 @@ import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.QueueName;
 import net.yacy.grid.YaCyServices;
-import net.yacy.grid.crawler.Crawler.CrawlstartURLs;
+import net.yacy.grid.crawler.Crawler;
+import net.yacy.grid.crawler.Crawler.CrawlstartURLSplitter;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
+import net.yacy.grid.tools.MultiProtocolURL;
 
 /**
  * 
@@ -74,34 +77,41 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         }
         
         // set the crawl id
-        CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawlstart.getString("crawlingURL"));
-        crawlstart.put("id", crawlstartURLs.getId());
-        crawlstart.put("crawlingURLs", crawlstartURLs.getURLs());
+        CrawlstartURLSplitter crawlstartURLs = new CrawlstartURLSplitter(crawlstart.getString("crawlingURL"));
+        Date now = new Date();
+        // start the crawls; each of the url in a separate crawl to enforce parallel loading from different hosts
+        SusiThought allCrawlstarts = new SusiThought();
+        for (MultiProtocolURL url: crawlstartURLs.getURLs()) {
+            JSONObject singlecrawl = new JSONObject();
+            for (String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
+            singlecrawl.put("id", Crawler.getCrawlID(url, now));
+            singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
+            try {
+                QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, url.getHost());
+                SusiThought json = new SusiThought();
+                json.setData(new JSONArray().put(singlecrawl));
+                JSONObject action = new JSONObject()
+                        .put("type", YaCyServices.crawler.name())
+                        .put("queue", queueName.name())
+                        .put("id", singlecrawl.getString("id"))
+                        .put("depth", 0);
+                SusiAction crawlAction = new SusiAction(action);
+                json.addAction(crawlAction);
+                allCrawlstarts.addAction(crawlAction);
+                byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
+                Data.gridBroker.send(YaCyServices.crawler, queueName, b);
+            } catch (IOException e) {
+                e.printStackTrace();
+                allCrawlstarts.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
+            }
+        }
         
         // construct a crawl start message
-        SusiThought json = new SusiThought();
-        json.setData(new JSONArray().put(crawlstart));
-        try {
-            QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, crawlstartURLs.getHashKey());
-            JSONObject action = new JSONObject()
-            	.put("type", YaCyServices.crawler.name())
-            	.put("queue", queueName.name())
-            	.put("id", crawlstart.getString("id"))
-            	.put("depth", 0);
-            json.addAction(new SusiAction(action));
-            
-            // put the crawl message on the queue
-            byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
-            Data.gridBroker.send(YaCyServices.crawler, queueName, b);
-			json.put(ObjectAPIHandler.SUCCESS_KEY, true);
-		} catch (IOException e) {
-			e.printStackTrace();
-			json.put(ObjectAPIHandler.SUCCESS_KEY, false);
-			json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
-		}
+        allCrawlstarts.setData(new JSONArray().put(crawlstart));
+        allCrawlstarts.put(ObjectAPIHandler.SUCCESS_KEY, allCrawlstarts.getActions().size() > 0);
         
         // finally add the crawl start on the queue
-        return new ServiceResponse(json);
+        return new ServiceResponse(allCrawlstarts);
     }
 
 }
