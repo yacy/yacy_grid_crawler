@@ -185,12 +185,13 @@ public class Crawler {
                 Data.logger.info("Fail: Action does not have an id: " + crawlaction.toString());
                 return false;
             }
-            JSONObject crawl = selectCrawlData(data, id);
+            JSONObject crawl = SusiThought.selectData(data, "id", id);
             if (crawl == null) {
                 Data.logger.info("Fail: ID of Action not found in data: " + crawlaction.toString());
                 return false;
             }
-            
+
+            JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
             int depth = crawlaction.getIntAttr("depth");
             if (depth == 0) {
                 // this is a crawl start
@@ -198,7 +199,6 @@ public class Crawler {
                 // we take the start url from the data object
                 //CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawl.getString("crawlingURL"));
                 //JSONArray urlArray = crawlstartURLs.getURLs();
-                JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
                 String hashKey =  "";
                 try {
                     hashKey = new MultiProtocolURL(urlArray.getString(0)).getHost();
@@ -222,61 +222,66 @@ public class Crawler {
             } else {
                 // this is a follow-up
             	
-            	// check depth
-            	int crawlingDepth = crawl.getInt("crawlingDepth");
-            	if (depth > crawlingDepth) {
-            		// this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-            		Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
-            		return true;
-            	}
-            	
-            	// load graph
+                	// check depth
+                	int crawlingDepth = crawl.getInt("crawlingDepth");
+                	if (depth > crawlingDepth) {
+                		// this is a leaf in the crawl tree (it does not mean that the crawl is finished)
+                		Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
+                		return true;
+                	}
+                	
+                	// load graph
                 String sourcegraph = crawlaction.getStringAttr("sourcegraph");
                 if (sourcegraph == null || sourcegraph.length() == 0) {
                     Data.logger.info("Fail: sourcegraph of Action is empty: " + crawlaction.toString());
                     return false;
                 }
                 try {
-                	JSONList jsonlist = null;
-                	if (crawlaction.hasAsset(sourcegraph)) {
-                		jsonlist = crawlaction.getJSONListAsset(sourcegraph);
-                	}
-                	if (jsonlist == null) try {
-                		Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
-                    	byte[] graphassetbytes = graphasset.getPayload();
-                    	jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
-                    } catch (IOException e) {
-                		e.printStackTrace();
-                		Data.logger.warn("could not read asset from storage: " + sourcegraph);
-                		return false;
-                	}
-                	graphloop: for (int line = 0; line < jsonlist.length(); line++) {
+                    	JSONList jsonlist = null;
+                    	if (crawlaction.hasAsset(sourcegraph)) {
+                    		jsonlist = crawlaction.getJSONListAsset(sourcegraph);
+                    	}
+                    	if (jsonlist == null) try {
+                    		Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
+                        	byte[] graphassetbytes = graphasset.getPayload();
+                        	jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
+                        } catch (IOException e) {
+                    		e.printStackTrace();
+                    		Data.logger.warn("could not read asset from storage: " + sourcegraph);
+                    		return false;
+                    	}
+                    	graphloop: for (int line = 0; line < jsonlist.length(); line++) {
                 		JSONObject json = jsonlist.get(line);
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
                         
-                        //String url = json.getString(WebMapping.url_s.name());
                         Set<MultiProtocolURL> graph = new HashSet<>();
                         if (json.has(WebMapping.canonical_s.name())) try {
                             graph.add(new MultiProtocolURL(json.getString(WebMapping.canonical_s.name())));
                         } catch (MalformedURLException e) {
                             e.printStackTrace();
                         }
-                        fieldloop: for (String field: FIELDS_IN_GRAPH) {
+                        for (String field: FIELDS_IN_GRAPH) {
                             if (json.has(field)) {
                                 JSONArray a = json.getJSONArray(field);
-                                for (int i = 0; i < a.length(); i++) try {
-                                    graph.add(new MultiProtocolURL(a.getString(i)));
-                                } catch (MalformedURLException e) {
-                                    e.printStackTrace();
-                                    continue fieldloop;
+                                urlloop: for (int i = 0; i < a.length(); i++) {
+                                    String u = a.getString(i);
+                                    try {
+                                        graph.add(new MultiProtocolURL(u));
+                                    } catch (MalformedURLException e) {
+                                        Data.logger.warn("for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u);
+                                        e.printStackTrace();
+                                        continue urlloop;
+                                    }
                                 }
                             }
                         }
                         
                         // sort out doubles and apply filters
                         List<String> nextList = new ArrayList<>();
-                        Pattern mustmatch = Pattern.compile(crawl.getString("mustmatch"));
-                        Pattern mustnotmatch = Pattern.compile(crawl.getString("mustnotmatch"));
+                        String mustmatchs = crawl.getString("mustmatch");
+                        Pattern mustmatch = Pattern.compile(mustmatchs);
+                        String mustnotmatchs = crawl.getString("mustnotmatch");
+                        Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
                         if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
                         final Set<MultiProtocolURL> doubleset = doubles.get(id);
                         graph.forEach(url -> {
@@ -335,17 +340,9 @@ public class Crawler {
                     Data.logger.info("Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
                     return false;
                 }
-            }
+            } // else depth != 0
             
             return false;
-        }
-        
-        private static JSONObject selectCrawlData(JSONArray data, String id) {
-            for (int i = 0; i < data.length(); i++) {
-                JSONObject json = data.getJSONObject(i);
-                if (json.has("id") && json.get("id").equals(id)) return json;
-            }
-            return null;
         }
     }
 
@@ -407,6 +404,7 @@ public class Crawler {
         return crawlerAction;
     }
     
+    /*
     public static class CrawlstartURLs {
         
         JSONArray crawlingURLArray;
@@ -414,7 +412,8 @@ public class Crawler {
         String hashKey = "";
         
         public CrawlstartURLs(String crawlingURLsString) {
-            String[] crawlingURLs = crawlingURLsString.split(" ");
+            crawlingURLsString = crawlingURLsString.replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
+            String[] crawlingURLs = crawlingURLsString.split("\n");
             this.crawlingURLArray = new JSONArray();
             this.id = "";
             int c = 0;
@@ -428,7 +427,8 @@ public class Crawler {
                     e.printStackTrace();
                 }
             }
-            id = id + DateParser.secondDateFormat.format(new Date()).replace(':', '-').replace(' ', '-');
+            if (id.length() > 80) id = id.substring(0, 80) + "-" + id.hashCode();
+            id = id + "-" + DateParser.secondDateFormat.format(new Date()).replace(':', '-').replace(' ', '-');
         }
         
         public String getId() {
@@ -442,6 +442,44 @@ public class Crawler {
         public String getHashKey() {
             return this.hashKey;
         }
+    }
+    */
+    
+    public static class CrawlstartURLSplitter {
+        
+        private List<MultiProtocolURL> crawlingURLArray;
+        private List<String> badURLStrings;
+        
+        public CrawlstartURLSplitter(String crawlingURLsString) {
+            crawlingURLsString = crawlingURLsString.replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
+            String[] crawlingURLs = crawlingURLsString.split("\n");
+            this.crawlingURLArray = new ArrayList<>();
+            this.badURLStrings = new ArrayList<>();
+            for (String u: crawlingURLs) {
+                try {
+                    MultiProtocolURL url = new MultiProtocolURL(u);
+                    this.crawlingURLArray.add(url);
+                } catch (MalformedURLException e) {
+                    this.badURLStrings.add(u);
+                    e.printStackTrace();
+                }
+            }
+        }
+        
+        public List<MultiProtocolURL> getURLs() {
+            return this.crawlingURLArray;
+        }
+        
+        public List<String> getBadURLs() {
+            return this.badURLStrings;
+        }
+    }
+    
+    public static String getCrawlID(MultiProtocolURL url, Date date) {
+        String id = url.getHost();
+        if (id.length() > 80) id = id.substring(0, 80) + "-" + id.hashCode();
+        id = id + "-" + DateParser.secondDateFormat.format(date).replace(':', '-').replace(' ', '-');
+        return id;
     }
     
     public static void main(String[] args) {
