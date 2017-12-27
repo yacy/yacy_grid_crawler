@@ -78,7 +78,6 @@ public class Crawler {
             WebMapping.inboundlinks_sxt.name(),
             WebMapping.outboundlinks_sxt.name(),
             WebMapping.images_sxt.name(),
-            WebMapping.images_alt_sxt.name(),
             WebMapping.frames_sxt.name(),
             WebMapping.iframes_sxt.name()
     };
@@ -171,13 +170,13 @@ public class Crawler {
 }
      */
     
-    
+
     public static class CrawlerListener extends AbstractBrokerListener implements BrokerListener {
 
         public CrawlerListener(YaCyServices service) {
-             super(service, Runtime.getRuntime().availableProcessors());
+            super(service, Runtime.getRuntime().availableProcessors());
         }
-        
+
         @Override
         public boolean processAction(SusiAction crawlaction, JSONArray data) {
             String id = crawlaction.getStringAttr("id");
@@ -203,12 +202,12 @@ public class Crawler {
                 try {
                     hashKey = new MultiProtocolURL(urlArray.getString(0)).getHost();
                 } catch (MalformedURLException | JSONException e1) {}
-                
+
                 // first, we must load the page(s): construct a loader message
                 SusiThought json = new SusiThought();
                 json.setData(data);
                 Date timestamp = new Date();
-                
+
                 // put a loader message on the queue
                 try {
                     JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
@@ -221,39 +220,39 @@ public class Crawler {
                 }
             } else {
                 // this is a follow-up
-            	
-                	// check depth
-                	int crawlingDepth = crawl.getInt("crawlingDepth");
-                	if (depth > crawlingDepth) {
-                		// this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-                		Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
-                		return true;
-                	}
-                	
-                	// load graph
+
+                // check depth
+                int crawlingDepth = crawl.getInt("crawlingDepth");
+                if (depth > crawlingDepth) {
+                    // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
+                    Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
+                    return true;
+                }
+
+                // load graph
                 String sourcegraph = crawlaction.getStringAttr("sourcegraph");
                 if (sourcegraph == null || sourcegraph.length() == 0) {
                     Data.logger.info("Fail: sourcegraph of Action is empty: " + crawlaction.toString());
                     return false;
                 }
                 try {
-                    	JSONList jsonlist = null;
-                    	if (crawlaction.hasAsset(sourcegraph)) {
-                    		jsonlist = crawlaction.getJSONListAsset(sourcegraph);
-                    	}
-                    	if (jsonlist == null) try {
-                    		Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
-                        	byte[] graphassetbytes = graphasset.getPayload();
-                        	jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
-                        } catch (IOException e) {
-                    		e.printStackTrace();
-                    		Data.logger.warn("could not read asset from storage: " + sourcegraph);
-                    		return false;
-                    	}
-                    	graphloop: for (int line = 0; line < jsonlist.length(); line++) {
-                		JSONObject json = jsonlist.get(line);
+                    JSONList jsonlist = null;
+                    if (crawlaction.hasAsset(sourcegraph)) {
+                        jsonlist = crawlaction.getJSONListAsset(sourcegraph);
+                    }
+                    if (jsonlist == null) try {
+                        Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
+                        byte[] graphassetbytes = graphasset.getPayload();
+                        jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Data.logger.warn("could not read asset from storage: " + sourcegraph);
+                        return false;
+                    }
+                    graphloop: for (int line = 0; line < jsonlist.length(); line++) {
+                        JSONObject json = jsonlist.get(line);
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
-                        
+
                         Set<MultiProtocolURL> graph = new HashSet<>();
                         if (json.has(WebMapping.canonical_s.name())) try {
                             graph.add(new MultiProtocolURL(json.getString(WebMapping.canonical_s.name())));
@@ -275,7 +274,7 @@ public class Crawler {
                                 }
                             }
                         }
-                        
+
                         // sort out doubles and apply filters
                         List<String> nextList = new ArrayList<>();
                         String mustmatchs = crawl.getString("mustmatch");
@@ -287,17 +286,17 @@ public class Crawler {
                         graph.forEach(url -> {
                             if (!doubleset.contains(url)) {
                                 doubleset.add(url);
-                                
+
                                 // check if the url shall be loaded using the constraints
                                 String u = url.toNormalform(true);
                                 if (mustmatch.matcher(u).matches() &&
-                                    !mustnotmatch.matcher(u).matches()) {
+                                        !mustnotmatch.matcher(u).matches()) {
                                     // add url to next stack
                                     nextList.add(u);
                                 }
                             }
                         });
-                        
+
                         // create partitions
                         List<JSONArray> partitions = new ArrayList<>();
                         int maxURLsPerPartition = 2;
@@ -309,16 +308,16 @@ public class Crawler {
                             }
                             partitions.get(c - 1).put(url);
                         });
-                        
-                        
+
+
                         // create follow-up crawl to next depth
                         Date timestamp = new Date();
                         for (int pc = 0; pc < partitions.size(); pc++) {
                             JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, timestamp, pc); // action includes whole hierarchy of follow-up actions
                             SusiThought nextjson = new SusiThought()
-                                .setData(data)
-                                .addAction(new SusiAction(loaderAction));
-                            
+                                    .setData(data)
+                                    .addAction(new SusiAction(loaderAction));
+
                             // put a loader message on the queue
                             byte[] b = nextjson.toString(2).getBytes(StandardCharsets.UTF_8);
                             try {
@@ -333,7 +332,7 @@ public class Crawler {
                             }
                         };
                     }
-                    
+
                     Data.logger.info("processed message from queue and loaded graph " + sourcegraph);
                     return true;
                 } catch (Throwable e) {
@@ -341,7 +340,7 @@ public class Crawler {
                     return false;
                 }
             } // else depth != 0
-            
+
             return false;
         }
     }
@@ -389,9 +388,9 @@ public class Crawler {
     }
     
     private final static String intf(int i) {
-    	String s = Integer.toString(i);
-    	while (s.length() < 3) s = '0' + s;
-    	return s;
+       String s = Integer.toString(i);
+       while (s.length() < 3) s = '0' + s;
+       return s;
     }
 
     public static JSONObject newCrawlerAction(String id, int depth, String hashKey) throws IOException {
