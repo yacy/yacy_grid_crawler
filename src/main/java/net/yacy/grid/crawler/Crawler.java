@@ -450,17 +450,19 @@ public class Crawler {
         private List<String> badURLStrings;
         
         public CrawlstartURLSplitter(String crawlingURLsString) {
-            crawlingURLsString = crawlingURLsString.replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
+            Data.logger.info("splitting url list: " + crawlingURLsString);
+            crawlingURLsString = crawlingURLsString.replaceAll("|http", "\nhttp").replaceAll("%7Chttp", "\nhttp").replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
             String[] crawlingURLs = crawlingURLsString.split("\n");
             this.crawlingURLArray = new ArrayList<>();
             this.badURLStrings = new ArrayList<>();
             for (String u: crawlingURLs) {
                 try {
                     MultiProtocolURL url = new MultiProtocolURL(u);
+                    Data.logger.info("splitted url: " + url.toNormalform(true));
                     this.crawlingURLArray.add(url);
                 } catch (MalformedURLException e) {
                     this.badURLStrings.add(u);
-                    Data.logger.warn("error when starting crawl with splitter url " + u, e);
+                    Data.logger.warn("error when starting crawl with splitter url " + u + "; splitted from " + crawlingURLsString, e);
                 }
             }
         }
