@@ -101,7 +101,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
                 Data.gridBroker.send(YaCyServices.crawler, queueName, b);
             } catch (IOException e) {
-                e.printStackTrace();
+                Data.logger.warn("error when starting crawl for " + url.toNormalform(true), e);
                 allCrawlstarts.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
             }
         }

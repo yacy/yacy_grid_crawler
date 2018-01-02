@@ -216,7 +216,7 @@ public class Crawler {
                     QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
                     Data.gridBroker.send(YaCyServices.loader, queueName, b);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    Data.logger.warn("error when starting crawl with depth = 0 with id " + id, e);
                 }
             } else {
                 // this is a follow-up
@@ -245,8 +245,7 @@ public class Crawler {
                         byte[] graphassetbytes = graphasset.getPayload();
                         jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
                     } catch (IOException e) {
-                        e.printStackTrace();
-                        Data.logger.warn("could not read asset from storage: " + sourcegraph);
+                        Data.logger.warn("could not read asset from storage: " + sourcegraph, e);
                         return false;
                     }
                     graphloop: for (int line = 0; line < jsonlist.length(); line++) {
@@ -254,10 +253,11 @@ public class Crawler {
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
 
                         Set<MultiProtocolURL> graph = new HashSet<>();
-                        if (json.has(WebMapping.canonical_s.name())) try {
-                            graph.add(new MultiProtocolURL(json.getString(WebMapping.canonical_s.name())));
+                        String graphurl = json.has(WebMapping.canonical_s.name()) ? json.getString(WebMapping.canonical_s.name()) : null;
+                        if (graphurl != null) try {
+                            graph.add(new MultiProtocolURL(graphurl));
                         } catch (MalformedURLException e) {
-                            e.printStackTrace();
+                            Data.logger.warn("error when starting crawl with canonical url " + graphurl, e);
                         }
                         for (String field: FIELDS_IN_GRAPH) {
                             if (json.has(field)) {
@@ -267,8 +267,7 @@ public class Crawler {
                                     try {
                                         graph.add(new MultiProtocolURL(u));
                                     } catch (MalformedURLException e) {
-                                        Data.logger.warn("for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u);
-                                        e.printStackTrace();
+                                        Data.logger.warn("for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u, e);
                                         continue urlloop;
                                     }
                                 }
@@ -319,14 +318,15 @@ public class Crawler {
                                     .addAction(new SusiAction(loaderAction));
 
                             // put a loader message on the queue
-                            byte[] b = nextjson.toString(2).getBytes(StandardCharsets.UTF_8);
+                            String message = nextjson.toString(2);
+                            byte[] b = message.getBytes(StandardCharsets.UTF_8);
                             try {
                                 Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
                                 QueueName queueName = new QueueName(loaderAction.getString("queue"));
                                 Data.gridBroker.send(serviceName, queueName, b);
                                 json.put(ObjectAPIHandler.SUCCESS_KEY, true);
                             } catch (IOException e) {
-                                e.printStackTrace();
+                                Data.logger.warn("error when starting crawl with message " + message, e);
                                 json.put(ObjectAPIHandler.SUCCESS_KEY, false);
                                 json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
                             }
@@ -460,7 +460,7 @@ public class Crawler {
                     this.crawlingURLArray.add(url);
                 } catch (MalformedURLException e) {
                     this.badURLStrings.add(u);
-                    e.printStackTrace();
+                    Data.logger.warn("error when starting crawl with splitter url " + u, e);
                 }
             }
         }
