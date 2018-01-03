@@ -360,7 +360,7 @@ public class Crawler {
         String graphasset =  namestub + ".graph.jsonlist";
         String hashKey = new MultiProtocolURL(urls.getString(0)).getHost();
 
-        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
+        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, hashKey);
         QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.LOOKUP, hashKey);
         QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.LOOKUP, hashKey);
         JSONObject loaderAction = new JSONObject(true)
