@@ -451,7 +451,7 @@ public class Crawler {
         
         public CrawlstartURLSplitter(String crawlingURLsString) {
             Data.logger.info("splitting url list: " + crawlingURLsString);
-            crawlingURLsString = crawlingURLsString.replaceAll("|http", "\nhttp").replaceAll("%7Chttp", "\nhttp").replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
+            crawlingURLsString = crawlingURLsString.replaceAll("\\|http", "\nhttp").replaceAll("%7Chttp", "\nhttp").replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
             String[] crawlingURLs = crawlingURLsString.split("\n");
             this.crawlingURLArray = new ArrayList<>();
             this.badURLStrings = new ArrayList<>();
