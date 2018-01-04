@@ -226,7 +226,7 @@ public class Crawler {
                 int crawlingDepth = crawl.getInt("crawlingDepth");
                 if (depth > crawlingDepth) {
                     // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-                    Data.logger.info("Leaf: reached a crawl leaf for crawl " + id);
+                    Data.logger.info("Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
                     return true;
                 }
 
