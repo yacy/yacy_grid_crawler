@@ -58,6 +58,7 @@ import net.yacy.grid.mcp.BrokerListener;
 import net.yacy.grid.mcp.Data;
 import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
+import net.yacy.grid.tools.Classification.ContentDomain;
 import net.yacy.grid.tools.DateParser;
 import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
@@ -283,15 +284,18 @@ public class Crawler {
                         if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
                         final Set<MultiProtocolURL> doubleset = doubles.get(id);
                         graph.forEach(url -> {
-                            if (!doubleset.contains(url)) {
-                                doubleset.add(url);
-
-                                // check if the url shall be loaded using the constraints
-                                String u = url.toNormalform(true);
-                                if (mustmatch.matcher(u).matches() &&
-                                        !mustnotmatch.matcher(u).matches()) {
-                                    // add url to next stack
-                                    nextList.add(u);
+                            ContentDomain cd = url.getContentDomainFromExt();
+                            if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
+                                if (!doubleset.contains(url)) {
+                                    doubleset.add(url);
+    
+                                    // check if the url shall be loaded using the constraints
+                                    String u = url.toNormalform(true);
+                                    if (mustmatch.matcher(u).matches() &&
+                                            !mustnotmatch.matcher(u).matches()) {
+                                        // add url to next stack
+                                        nextList.add(u);
+                                    }
                                 }
                             }
                         });
