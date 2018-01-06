@@ -78,12 +78,12 @@ public class Crawler {
     private final static String[] FIELDS_IN_GRAPH = new String[]{
             WebMapping.inboundlinks_sxt.name(),
             WebMapping.outboundlinks_sxt.name(),
-            WebMapping.images_sxt.name(),
+            //WebMapping.images_sxt.name(),
             WebMapping.frames_sxt.name(),
             WebMapping.iframes_sxt.name()
     };
     
-    private final static Map<String, Set<MultiProtocolURL>> doubles = new ConcurrentHashMap<>();
+    private final static Map<String, Set<Integer>> doubles = new ConcurrentHashMap<>();
     /**
      * broker listener, takes process messages from the queue "crawler", "webcrawler"
      * i.e. test with:
@@ -182,12 +182,12 @@ public class Crawler {
         public boolean processAction(SusiAction crawlaction, JSONArray data) {
             String id = crawlaction.getStringAttr("id");
             if (id == null || id.length() == 0) {
-                Data.logger.info("Fail: Action does not have an id: " + crawlaction.toString());
+                Data.logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
                 return false;
             }
             JSONObject crawl = SusiThought.selectData(data, "id", id);
             if (crawl == null) {
-                Data.logger.info("Fail: ID of Action not found in data: " + crawlaction.toString());
+                Data.logger.info("Crawler.processAction Fail: ID of Action not found in data: " + crawlaction.toString());
                 return false;
             }
 
@@ -217,7 +217,7 @@ public class Crawler {
                     QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
                     Data.gridBroker.send(YaCyServices.loader, queueName, b);
                 } catch (IOException e) {
-                    Data.logger.warn("error when starting crawl with depth = 0 with id " + id, e);
+                    Data.logger.warn("Crawler.processAction error when starting crawl with depth = 0 with id " + id, e);
                 }
             } else {
                 // this is a follow-up
@@ -226,14 +226,14 @@ public class Crawler {
                 int crawlingDepth = crawl.getInt("crawlingDepth");
                 if (depth > crawlingDepth) {
                     // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-                    Data.logger.info("Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
+                    Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
                     return true;
                 }
 
                 // load graph
                 String sourcegraph = crawlaction.getStringAttr("sourcegraph");
                 if (sourcegraph == null || sourcegraph.length() == 0) {
-                    Data.logger.info("Fail: sourcegraph of Action is empty: " + crawlaction.toString());
+                    Data.logger.info("Crawler.processAction Fail: sourcegraph of Action is empty: " + crawlaction.toString());
                     return false;
                 }
                 try {
@@ -246,9 +246,19 @@ public class Crawler {
                         byte[] graphassetbytes = graphasset.getPayload();
                         jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
                     } catch (IOException e) {
-                        Data.logger.warn("could not read asset from storage: " + sourcegraph, e);
+                        Data.logger.warn("Crawler.processAction could not read asset from storage: " + sourcegraph, e);
                         return false;
                     }
+                    
+                    // declare filter from the crawl profile
+                    String mustmatchs = crawl.getString("mustmatch");
+                    Pattern mustmatch = Pattern.compile(mustmatchs);
+                    String mustnotmatchs = crawl.getString("mustnotmatch");
+                    Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
+                    
+                    // For each of the parsed document, there is a target graph.
+                    // The graph contains all url elements which may appear in a document.
+                    // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
                     graphloop: for (int line = 0; line < jsonlist.length(); line++) {
                         JSONObject json = jsonlist.get(line);
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
@@ -258,7 +268,7 @@ public class Crawler {
                         if (graphurl != null) try {
                             graph.add(new MultiProtocolURL(graphurl));
                         } catch (MalformedURLException e) {
-                            Data.logger.warn("error when starting crawl with canonical url " + graphurl, e);
+                            Data.logger.warn("Crawler.processAction error when starting crawl with canonical url " + graphurl, e);
                         }
                         for (String field: FIELDS_IN_GRAPH) {
                             if (json.has(field)) {
@@ -268,7 +278,7 @@ public class Crawler {
                                     try {
                                         graph.add(new MultiProtocolURL(u));
                                     } catch (MalformedURLException e) {
-                                        Data.logger.warn("for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u, e);
+                                        Data.logger.warn("Crawler.processAction for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u, e);
                                         continue urlloop;
                                     }
                                 }
@@ -277,17 +287,14 @@ public class Crawler {
 
                         // sort out doubles and apply filters
                         List<String> nextList = new ArrayList<>();
-                        String mustmatchs = crawl.getString("mustmatch");
-                        Pattern mustmatch = Pattern.compile(mustmatchs);
-                        String mustnotmatchs = crawl.getString("mustnotmatch");
-                        Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
                         if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
-                        final Set<MultiProtocolURL> doubleset = doubles.get(id);
+                        final Set<Integer> doubleset = doubles.get(id);
                         graph.forEach(url -> {
                             ContentDomain cd = url.getContentDomainFromExt();
                             if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
-                                if (!doubleset.contains(url)) {
-                                    doubleset.add(url);
+                                Integer urlhash = url.hashCode();
+                                if (!doubleset.contains(urlhash)) {
+                                    doubleset.add(urlhash);
     
                                     // check if the url shall be loaded using the constraints
                                     String u = url.toNormalform(true);
@@ -302,7 +309,7 @@ public class Crawler {
 
                         // create partitions
                         List<JSONArray> partitions = new ArrayList<>();
-                        int maxURLsPerPartition = 2;
+                        int maxURLsPerPartition = 4;
                         nextList.forEach(url -> {
                             int c = partitions.size();
                             if (c == 0 || partitions.get(c - 1).length() >= maxURLsPerPartition) {
@@ -337,10 +344,10 @@ public class Crawler {
                         };
                     }
 
-                    Data.logger.info("processed message from queue and loaded graph " + sourcegraph);
+                    Data.logger.info("Crawler.processAction processed message from queue and loaded graph " + sourcegraph);
                     return true;
                 } catch (Throwable e) {
-                    Data.logger.info("Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
+                    Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
                     return false;
                 }
             } // else depth != 0
