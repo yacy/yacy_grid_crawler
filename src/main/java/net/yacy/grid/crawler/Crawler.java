@@ -60,6 +60,7 @@ import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
 import net.yacy.grid.tools.Classification.ContentDomain;
 import net.yacy.grid.tools.DateParser;
+import net.yacy.grid.tools.GitTool;
 import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
 
@@ -514,6 +515,8 @@ public class Crawler {
         new Thread(brokerListener).start();
 
         // start server
+        Data.logger.info("started Crawler");
+        Data.logger.info(new GitTool().toString());
         Service.runService(null);
         brokerListener.terminate();
     }
