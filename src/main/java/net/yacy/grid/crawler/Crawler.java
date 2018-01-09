@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -49,7 +50,6 @@ import net.yacy.grid.Services;
 import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.api.CrawlStartService;
 import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
-import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.ShardingMethod;
@@ -193,6 +193,7 @@ public class Crawler {
 
             JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
             int depth = crawlaction.getIntAttr("depth");
+            int crawlingDepth = crawl.getInt("crawlingDepth");
             if (depth == 0) {
                 // this is a crawl start
                 // construct the loading, parsing, indexing action
@@ -207,11 +208,10 @@ public class Crawler {
                 // first, we must load the page(s): construct a loader message
                 SusiThought json = new SusiThought();
                 json.setData(data);
-                Date timestamp = new Date();
 
                 // put a loader message on the queue
                 try {
-                    JSONObject loaderAction = newLoaderAction(id, urlArray, 0, timestamp, 0); // action includes whole hierarchy of follow-up actions
+                    JSONObject loaderAction = newLoaderAction(id, urlArray, 0, 0, System.currentTimeMillis(), 0, depth < crawlingDepth, true); // action includes whole hierarchy of follow-up actions
                     json.addAction(new SusiAction(loaderAction));
                     byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
                     QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
@@ -222,8 +222,7 @@ public class Crawler {
             } else {
                 // this is a follow-up
 
-                // check depth
-                int crawlingDepth = crawl.getInt("crawlingDepth");
+                // check depth (this check should be deprecated because we limit by omitting the crawl message at crawl tree leaves)
                 if (depth > crawlingDepth) {
                     // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
                     Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
@@ -255,10 +254,16 @@ public class Crawler {
                     Pattern mustmatch = Pattern.compile(mustmatchs);
                     String mustnotmatchs = crawl.getString("mustnotmatch");
                     Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
+                    // filter for indexing steering
+                    String indexmustmatchs = crawl.getString("indexmustmatch");
+                    Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
+                    String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
+                    Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
                     
                     // For each of the parsed document, there is a target graph.
                     // The graph contains all url elements which may appear in a document.
                     // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
+                    Set<String> nextList = new HashSet<>();
                     graphloop: for (int line = 0; line < jsonlist.length(); line++) {
                         JSONObject json = jsonlist.get(line);
                         if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
@@ -287,48 +292,52 @@ public class Crawler {
                         }
 
                         // sort out doubles and apply filters
-                        List<String> nextList = new ArrayList<>();
                         if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
                         final Set<Integer> doubleset = doubles.get(id);
                         graph.forEach(url -> {
                             ContentDomain cd = url.getContentDomainFromExt();
                             if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
-                                Integer urlhash = url.hashCode();
-                                if (!doubleset.contains(urlhash)) {
-                                    doubleset.add(urlhash);
-    
-                                    // check if the url shall be loaded using the constraints
-                                    String u = url.toNormalform(true);
-                                    if (mustmatch.matcher(u).matches() &&
-                                            !mustnotmatch.matcher(u).matches()) {
+                                // check if the url shall be loaded using the constraints
+                                String u = url.toNormalform(true);
+                                if (mustmatch.matcher(u).matches() && !mustnotmatch.matcher(u).matches()) {
+                                    Integer urlhash = url.hashCode();
+                                    if (!doubleset.contains(urlhash)) {
+                                        doubleset.add(urlhash);
                                         // add url to next stack
                                         nextList.add(u);
                                     }
                                 }
                             }
                         });
+                        Data.logger.info("Crawler.processAction processed sub-graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
+                    }
 
+                    // divide the nextList into two sub-lists, one which will reach the indexer and another one which will not cause indexing
+                    @SuppressWarnings("unchecked")
+                    List<String>[] indexNoIndex = new List[2];
+                    indexNoIndex[0] = new ArrayList<>(); // for: index
+                    indexNoIndex[1] = new ArrayList<>(); // for: no-Index
+                    nextList.forEach(url -> {
+                        if (indexmustmatch.matcher(url).matches() && !indexmustnotmatch.matcher(url).matches()) {
+                            indexNoIndex[0].add(url);
+                        } else {
+                            indexNoIndex[1].add(url);
+                        }
+                    });
+
+                    long timestamp = System.currentTimeMillis();
+                    
+                    for (int ini = 0; ini < 2; ini++) {
                         // create partitions
-                        List<JSONArray> partitions = new ArrayList<>();
-                        int maxURLsPerPartition = 4;
-                        nextList.forEach(url -> {
-                            int c = partitions.size();
-                            if (c == 0 || partitions.get(c - 1).length() >= maxURLsPerPartition) {
-                                partitions.add(new JSONArray());
-                                c++;
-                            }
-                            partitions.get(c - 1).put(url);
-                        });
-
-
+                        List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
+    
                         // create follow-up crawl to next depth
-                        Date timestamp = new Date();
                         for (int pc = 0; pc < partitions.size(); pc++) {
-                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, timestamp, pc); // action includes whole hierarchy of follow-up actions
+                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
                             SusiThought nextjson = new SusiThought()
                                     .setData(data)
                                     .addAction(new SusiAction(loaderAction));
-
+    
                             // put a loader message on the queue
                             String message = nextjson.toString(2);
                             byte[] b = message.getBytes(StandardCharsets.UTF_8);
@@ -336,17 +345,12 @@ public class Crawler {
                                 Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
                                 QueueName queueName = new QueueName(loaderAction.getString("queue"));
                                 Data.gridBroker.send(serviceName, queueName, b);
-                                json.put(ObjectAPIHandler.SUCCESS_KEY, true);
                             } catch (IOException e) {
                                 Data.logger.warn("error when starting crawl with message " + message, e);
-                                json.put(ObjectAPIHandler.SUCCESS_KEY, false);
-                                json.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
                             }
                         };
-                        Data.logger.info("Crawler.processAction processed graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
                     }
-
-                    Data.logger.info("Crawler.processAction processed message from queue and loaded graph " + sourcegraph);
+                    Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
                     return true;
                 } catch (Throwable e) {
                     Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
@@ -357,46 +361,99 @@ public class Crawler {
             return false;
         }
     }
+    
+    private static List<JSONArray> createPartition(Collection<String> urls, int partitionSize) {
+        List<JSONArray> partitions = new ArrayList<>();
+        urls.forEach(url -> {
+            int c = partitions.size();
+            if (c == 0 || partitions.get(c - 1).length() >= partitionSize) {
+                partitions.add(new JSONArray());
+                c++;
+            }
+            partitions.get(c - 1).put(url);
+        });
+        return partitions;
+    }
 
     private final static String PATTERN_TIMEF = "MMddHHmmssSSS"; 
-    public final static SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US);
     
+    /**
+     * Create a new loader action. This action contains all follow-up actions after
+     * loading to create a steeing of parser, indexing and follow-up crawler actions.
+     * @param id the crawl id
+     * @param urls the urls which are part of the same actions
+     * @param depth the depth of the crawl step (0 is start depth)
+     * @param retry the number of load re-tries (0 is no retry, shows that this is the first attempt)
+     * @param timestamp the current time when the crawler created the action
+     * @param partition unique number of the url set partition. This is used to create asset names.
+     * @param doCrawling flag: if true, create a follow-up crawling action. set this to false to terminate crawling afterwards
+     * @param doIndexing flag: if true, do an indexing after loading. set this to false if the purpose is only a follow-up crawl after parsing
+     * @return the action json
+     * @throws IOException
+     */
     public static JSONObject newLoaderAction(
             String id,
             JSONArray urls,
             int depth,
-            Date timestamp,
-            int partition) throws IOException {
-        String namestub = id + "/d" + intf(depth) + "-t" + FORMAT_TIMEF.format(timestamp) + "-p" + intf(partition);
+            int retry,
+            long timestamp,
+            int partition,
+            boolean doCrawling,
+            boolean doIndexing) throws IOException {
+        // create file names for the assets: this uses depth and partition information
+        SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US); // we must create this here to prevent concurrency bugs which are there in the date formatter :((
+        String namestub = id + "/d" + intf(depth) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition);
         String warcasset =  namestub + ".warc.gz";
         String webasset =  namestub + ".web.jsonlist";
         String graphasset =  namestub + ".graph.jsonlist";
         String hashKey = new MultiProtocolURL(urls.getString(0)).getHost();
 
-        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, hashKey);
-        QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.LOOKUP, hashKey);
-        QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.LOOKUP, hashKey);
-        JSONObject loaderAction = new JSONObject(true)
-            .put("type", YaCyServices.loader.name())
-            .put("queue", loaderQueueName.name())
-            .put("id", id)
-            .put("urls", urls)
-            .put("targetasset", warcasset)
-            .put("actions", new JSONArray().put(new JSONObject(true)
+        // create actions to be done in reverse order:
+        // at the end of the processing we simultaneously place actions on the indexing and crawling queue
+        JSONArray postParserActions = new JSONArray();
+        assert doIndexing || doCrawling; // one or both must be true; doing none of that does not make sense
+        // if all of the urls shall be indexed (see indexing patterns) then do indexing actions
+        if (doIndexing) {
+            QueueName indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.BALANCE, hashKey);
+            postParserActions.put(new JSONObject(true)
+                .put("type", YaCyServices.indexer.name())
+                .put("queue", indexerQueueName.name())
+                .put("id", id)
+                .put("sourceasset", webasset)
+             );
+        }
+        // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
+        if (doCrawling) {
+            QueueName crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, hashKey);
+            postParserActions.put(new JSONObject(true)
+                .put("type", YaCyServices.crawler.name())
+                .put("queue", crawlerQueueName.name())
+                .put("id", id)
+                .put("depth", depth + 1)
+                .put("sourcegraph", graphasset)
+             );
+        }
+        
+        // bevor that and after loading we have a parsing action
+        QueueName parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.BALANCE, hashKey);
+        JSONArray parserActions = new JSONArray().put(new JSONObject(true)
                 .put("type", YaCyServices.parser.name())
                 .put("queue", parserQueueName.name())
                 .put("id", id)
                 .put("sourceasset", warcasset)
                 .put("targetasset", webasset)
                 .put("targetgraph", graphasset)
-                .put("actions", new JSONArray().put(new JSONObject(true)
-                    .put("type", YaCyServices.indexer.name())
-                    .put("queue", indexerQueueName.name())
-                    .put("id", id)
-                    .put("sourceasset", webasset)
-                 ).put(newCrawlerAction(id, depth + 1, hashKey)
-                    .put("sourcegraph", graphasset)
-                 ))));
+                .put("actions", postParserActions)); // actions after parsing
+        
+        // at the beginning of the process, we do a loading.
+        QueueName loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, hashKey);
+        JSONObject loaderAction = new JSONObject(true)
+            .put("type", YaCyServices.loader.name())
+            .put("queue", loaderQueueName.name())
+            .put("id", id)
+            .put("urls", urls)
+            .put("targetasset", warcasset)
+            .put("actions", parserActions); // actions after loading
         return loaderAction;
     }
     
@@ -405,57 +462,6 @@ public class Crawler {
        while (s.length() < 3) s = '0' + s;
        return s;
     }
-
-    public static JSONObject newCrawlerAction(String id, int depth, String hashKey) throws IOException {
-        QueueName crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, hashKey);
-        JSONObject crawlerAction = new JSONObject(true)
-            .put("type", YaCyServices.crawler.name())
-            .put("queue", crawlerQueueName.name())
-            .put("id", id)
-            .put("depth", depth);
-        return crawlerAction;
-    }
-    
-    /*
-    public static class CrawlstartURLs {
-        
-        JSONArray crawlingURLArray;
-        String id = "";
-        String hashKey = "";
-        
-        public CrawlstartURLs(String crawlingURLsString) {
-            crawlingURLsString = crawlingURLsString.replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
-            String[] crawlingURLs = crawlingURLsString.split("\n");
-            this.crawlingURLArray = new JSONArray();
-            this.id = "";
-            int c = 0;
-            for (String u: crawlingURLs) {
-                try {
-                    MultiProtocolURL url = new MultiProtocolURL(u);
-                    this.crawlingURLArray.put(url.toNormalform(true));
-                    this.id = this.id + url.getHost() + "-";
-                    if (c++ == 0) this.hashKey = url.getHost();
-                } catch (MalformedURLException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (id.length() > 80) id = id.substring(0, 80) + "-" + id.hashCode();
-            id = id + "-" + DateParser.secondDateFormat.format(new Date()).replace(':', '-').replace(' ', '-');
-        }
-        
-        public String getId() {
-            return this.id;
-        }
-        
-        public JSONArray getURLs() {
-            return this.crawlingURLArray;
-        }
-        
-        public String getHashKey() {
-            return this.hashKey;
-        }
-    }
-    */
     
     public static class CrawlstartURLSplitter {
         
