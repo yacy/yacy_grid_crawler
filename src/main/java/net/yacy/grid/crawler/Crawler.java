@@ -40,7 +40,6 @@ import javax.servlet.Servlet;
 
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
@@ -192,174 +191,143 @@ public class Crawler {
                 return false;
             }
 
-            JSONArray urlArray = crawl.getJSONArray("crawlingURLs");
             int depth = crawlaction.getIntAttr("depth");
             int crawlingDepth = crawl.getInt("crawlingDepth");
-            if (depth == 0) {
-                // this is a crawl start
-                // construct the loading, parsing, indexing action
-                // we take the start url from the data object
-                //CrawlstartURLs crawlstartURLs = new CrawlstartURLs(crawl.getString("crawlingURL"));
-                //JSONArray urlArray = crawlstartURLs.getURLs();
-                String hashKey =  "";
-                try {
-                    hashKey = new MultiProtocolURL(urlArray.getString(0)).getHost();
-                } catch (MalformedURLException | JSONException e1) {}
 
-                // first, we must load the page(s): construct a loader message
-                SusiThought json = new SusiThought();
-                json.setData(data);
+            // check depth (this check should be deprecated because we limit by omitting the crawl message at crawl tree leaves)
+            if (depth > crawlingDepth) {
+                // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
+                Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
+                return true;
+            }
 
-                // put a loader message on the queue
-                try {
-                    JSONObject loaderAction = newLoaderAction(id, urlArray, 0, 0, System.currentTimeMillis(), 0, depth < crawlingDepth, true); // action includes whole hierarchy of follow-up actions
-                    json.addAction(new SusiAction(loaderAction));
-                    byte[] b = json.toString(2).getBytes(StandardCharsets.UTF_8);
-                    QueueName queueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.LOOKUP, hashKey);
-                    Data.gridBroker.send(YaCyServices.loader, queueName, b);
+            // load graph
+            String sourcegraph = crawlaction.getStringAttr("sourcegraph");
+            if (sourcegraph == null || sourcegraph.length() == 0) {
+                Data.logger.info("Crawler.processAction Fail: sourcegraph of Action is empty: " + crawlaction.toString());
+                return false;
+            }
+            try {
+                JSONList jsonlist = null;
+                if (crawlaction.hasAsset(sourcegraph)) {
+                    jsonlist = crawlaction.getJSONListAsset(sourcegraph);
+                }
+                if (jsonlist == null) try {
+                    Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
+                    byte[] graphassetbytes = graphasset.getPayload();
+                    jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
                 } catch (IOException e) {
-                    Data.logger.warn("Crawler.processAction error when starting crawl with depth = 0 with id " + id, e);
-                }
-            } else {
-                // this is a follow-up
-
-                // check depth (this check should be deprecated because we limit by omitting the crawl message at crawl tree leaves)
-                if (depth > crawlingDepth) {
-                    // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-                    Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + id + ", depth = " + crawlingDepth);
-                    return true;
-                }
-
-                // load graph
-                String sourcegraph = crawlaction.getStringAttr("sourcegraph");
-                if (sourcegraph == null || sourcegraph.length() == 0) {
-                    Data.logger.info("Crawler.processAction Fail: sourcegraph of Action is empty: " + crawlaction.toString());
+                    Data.logger.warn("Crawler.processAction could not read asset from storage: " + sourcegraph, e);
                     return false;
                 }
-                try {
-                    JSONList jsonlist = null;
-                    if (crawlaction.hasAsset(sourcegraph)) {
-                        jsonlist = crawlaction.getJSONListAsset(sourcegraph);
-                    }
-                    if (jsonlist == null) try {
-                        Asset<byte[]> graphasset = Data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
-                        byte[] graphassetbytes = graphasset.getPayload();
-                        jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
-                    } catch (IOException e) {
-                        Data.logger.warn("Crawler.processAction could not read asset from storage: " + sourcegraph, e);
-                        return false;
-                    }
-                    
-                    // declare filter from the crawl profile
-                    String mustmatchs = crawl.getString("mustmatch");
-                    Pattern mustmatch = Pattern.compile(mustmatchs);
-                    String mustnotmatchs = crawl.getString("mustnotmatch");
-                    Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
-                    // filter for indexing steering
-                    String indexmustmatchs = crawl.getString("indexmustmatch");
-                    Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
-                    String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
-                    Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
-                    
-                    // For each of the parsed document, there is a target graph.
-                    // The graph contains all url elements which may appear in a document.
-                    // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
-                    Set<String> nextList = new HashSet<>();
-                    graphloop: for (int line = 0; line < jsonlist.length(); line++) {
-                        JSONObject json = jsonlist.get(line);
-                        if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
+                
+                // declare filter from the crawl profile
+                String mustmatchs = crawl.getString("mustmatch");
+                Pattern mustmatch = Pattern.compile(mustmatchs);
+                String mustnotmatchs = crawl.getString("mustnotmatch");
+                Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
+                // filter for indexing steering
+                String indexmustmatchs = crawl.getString("indexmustmatch");
+                Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
+                String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
+                Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
+                
+                // For each of the parsed document, there is a target graph.
+                // The graph contains all url elements which may appear in a document.
+                // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
+                Set<String> nextList = new HashSet<>();
+                graphloop: for (int line = 0; line < jsonlist.length(); line++) {
+                    JSONObject json = jsonlist.get(line);
+                    if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
 
-                        String sourceurl = json.has(WebMapping.url_s.getSolrFieldName()) ? json.getString(WebMapping.url_s.getSolrFieldName()) : "";
-                        Set<MultiProtocolURL> graph = new HashSet<>();
-                        String graphurl = json.has(WebMapping.canonical_s.name()) ? json.getString(WebMapping.canonical_s.name()) : null;
-                        if (graphurl != null) try {
-                            graph.add(new MultiProtocolURL(graphurl));
-                        } catch (MalformedURLException e) {
-                            Data.logger.warn("Crawler.processAction error when starting crawl with canonical url " + graphurl, e);
-                        }
-                        for (String field: FIELDS_IN_GRAPH) {
-                            if (json.has(field)) {
-                                JSONArray a = json.getJSONArray(field);
-                                urlloop: for (int i = 0; i < a.length(); i++) {
-                                    String u = a.getString(i);
-                                    try {
-                                        graph.add(new MultiProtocolURL(u));
-                                    } catch (MalformedURLException e) {
-                                        Data.logger.warn("Crawler.processAction for crawl url array " + urlArray.toString() + " we discovered a bad follow-up url: " + u, e);
-                                        continue urlloop;
-                                    }
+                    String sourceurl = json.has(WebMapping.url_s.getSolrFieldName()) ? json.getString(WebMapping.url_s.getSolrFieldName()) : "";
+                    Set<MultiProtocolURL> graph = new HashSet<>();
+                    String graphurl = json.has(WebMapping.canonical_s.name()) ? json.getString(WebMapping.canonical_s.name()) : null;
+                    if (graphurl != null) try {
+                        graph.add(new MultiProtocolURL(graphurl));
+                    } catch (MalformedURLException e) {
+                        Data.logger.warn("Crawler.processAction error when starting crawl with canonical url " + graphurl, e);
+                    }
+                    for (String field: FIELDS_IN_GRAPH) {
+                        if (json.has(field)) {
+                            JSONArray a = json.getJSONArray(field);
+                            urlloop: for (int i = 0; i < a.length(); i++) {
+                                String u = a.getString(i);
+                                try {
+                                    graph.add(new MultiProtocolURL(u));
+                                } catch (MalformedURLException e) {
+                                    Data.logger.warn("Crawler.processAction we discovered a bad follow-up url: " + u, e);
+                                    continue urlloop;
                                 }
                             }
                         }
-
-                        // sort out doubles and apply filters
-                        if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
-                        final Set<Integer> doubleset = doubles.get(id);
-                        graph.forEach(url -> {
-                            ContentDomain cd = url.getContentDomainFromExt();
-                            if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
-                                // check if the url shall be loaded using the constraints
-                                String u = url.toNormalform(true);
-                                if (mustmatch.matcher(u).matches() && !mustnotmatch.matcher(u).matches()) {
-                                    Integer urlhash = url.hashCode();
-                                    if (!doubleset.contains(urlhash)) {
-                                        doubleset.add(urlhash);
-                                        // add url to next stack
-                                        nextList.add(u);
-                                    }
-                                }
-                            }
-                        });
-                        Data.logger.info("Crawler.processAction processed sub-graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
                     }
 
-                    // divide the nextList into two sub-lists, one which will reach the indexer and another one which will not cause indexing
-                    @SuppressWarnings("unchecked")
-                    List<String>[] indexNoIndex = new List[2];
-                    indexNoIndex[0] = new ArrayList<>(); // for: index
-                    indexNoIndex[1] = new ArrayList<>(); // for: no-Index
-                    nextList.forEach(url -> {
-                        if (indexmustmatch.matcher(url).matches() && !indexmustnotmatch.matcher(url).matches()) {
-                            indexNoIndex[0].add(url);
-                        } else {
-                            indexNoIndex[1].add(url);
+                    // sort out doubles and apply filters
+                    if (!doubles.containsKey(id)) doubles.put(id, new ConcurrentHashSet<>());
+                    final Set<Integer> doubleset = doubles.get(id);
+                    graph.forEach(url -> {
+                        ContentDomain cd = url.getContentDomainFromExt();
+                        if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
+                            // check if the url shall be loaded using the constraints
+                            String u = url.toNormalform(true);
+                            if (mustmatch.matcher(u).matches() && !mustnotmatch.matcher(u).matches()) {
+                                Integer urlhash = url.hashCode();
+                                if (!doubleset.contains(urlhash)) {
+                                    doubleset.add(urlhash);
+                                    // add url to next stack
+                                    nextList.add(u);
+                                }
+                            }
                         }
                     });
-
-                    long timestamp = System.currentTimeMillis();
-                    
-                    for (int ini = 0; ini < 2; ini++) {
-                        // create partitions
-                        List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
-    
-                        // create follow-up crawl to next depth
-                        for (int pc = 0; pc < partitions.size(); pc++) {
-                            JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
-                            SusiThought nextjson = new SusiThought()
-                                    .setData(data)
-                                    .addAction(new SusiAction(loaderAction));
-    
-                            // put a loader message on the queue
-                            String message = nextjson.toString(2);
-                            byte[] b = message.getBytes(StandardCharsets.UTF_8);
-                            try {
-                                Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
-                                QueueName queueName = new QueueName(loaderAction.getString("queue"));
-                                Data.gridBroker.send(serviceName, queueName, b);
-                            } catch (IOException e) {
-                                Data.logger.warn("error when starting crawl with message " + message, e);
-                            }
-                        };
-                    }
-                    Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
-                    return true;
-                } catch (Throwable e) {
-                    Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
-                    return false;
+                    Data.logger.info("Crawler.processAction processed sub-graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
                 }
-            } // else depth != 0
 
-            return false;
+                // divide the nextList into two sub-lists, one which will reach the indexer and another one which will not cause indexing
+                @SuppressWarnings("unchecked")
+                List<String>[] indexNoIndex = new List[2];
+                indexNoIndex[0] = new ArrayList<>(); // for: index
+                indexNoIndex[1] = new ArrayList<>(); // for: no-Index
+                nextList.forEach(url -> {
+                    if (indexmustmatch.matcher(url).matches() && !indexmustnotmatch.matcher(url).matches()) {
+                        indexNoIndex[0].add(url);
+                    } else {
+                        indexNoIndex[1].add(url);
+                    }
+                });
+
+                long timestamp = System.currentTimeMillis();
+                
+                for (int ini = 0; ini < 2; ini++) {
+                    // create partitions
+                    List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
+
+                    // create follow-up crawl to next depth
+                    for (int pc = 0; pc < partitions.size(); pc++) {
+                        JSONObject loaderAction = newLoaderAction(id, partitions.get(pc), depth, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
+                        SusiThought nextjson = new SusiThought()
+                                .setData(data)
+                                .addAction(new SusiAction(loaderAction));
+
+                        // put a loader message on the queue
+                        String message = nextjson.toString(2);
+                        byte[] b = message.getBytes(StandardCharsets.UTF_8);
+                        try {
+                            Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
+                            QueueName queueName = new QueueName(loaderAction.getString("queue"));
+                            Data.gridBroker.send(serviceName, queueName, b);
+                        } catch (IOException e) {
+                            Data.logger.warn("error when starting crawl with message " + message, e);
+                        }
+                    };
+                }
+                Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
+                return true;
+            } catch (Throwable e) {
+                Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
+                return false;
+            }
         }
     }
     

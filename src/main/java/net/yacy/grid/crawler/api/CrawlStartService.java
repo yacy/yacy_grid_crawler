@@ -38,14 +38,16 @@ import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
+import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
+import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
 
 /**
  * 
  * Test URL:
- * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net
+ * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net&indexmustnotmatch=.*Mitmachen.*&mustmatch=.*yacy.net.*
  */
 public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
@@ -85,7 +87,8 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             JSONObject singlecrawl = new JSONObject();
             for (String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
             singlecrawl.put("id", Crawler.getCrawlID(url, now));
-            singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
+            //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
+            
             try {
                 QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, url.getHost());
                 SusiThought json = new SusiThought();
@@ -94,8 +97,11 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                         .put("type", YaCyServices.crawler.name())
                         .put("queue", queueName.name())
                         .put("id", singlecrawl.getString("id"))
-                        .put("depth", 0);
+                        .put("depth", 0)
+                        .put("sourcegraph", "rootasset");
                 SusiAction crawlAction = new SusiAction(action);
+                JSONObject graph = new JSONObject(true).put(WebMapping.canonical_s.getSolrFieldName(), url.toNormalform(true));
+                crawlAction.setJSONListAsset("rootasset", new JSONList().add(graph));
                 json.addAction(crawlAction);
                 allCrawlstarts.addAction(crawlAction);
                 byte[] b = json.toString().getBytes(StandardCharsets.UTF_8);
