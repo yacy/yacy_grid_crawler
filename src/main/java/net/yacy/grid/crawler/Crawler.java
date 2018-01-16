@@ -179,7 +179,7 @@ public class Crawler {
         }
 
         @Override
-        public boolean processAction(SusiAction crawlaction, JSONArray data) {
+        public boolean processAction(SusiAction crawlaction, JSONArray data, String processName, int processNumber) {
             String id = crawlaction.getStringAttr("id");
             if (id == null || id.length() == 0) {
                 Data.logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
