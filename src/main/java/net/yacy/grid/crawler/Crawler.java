@@ -464,10 +464,10 @@ public class Crawler {
         }
     }
     
-    public static String getCrawlID(MultiProtocolURL url, Date date) {
+    public static String getCrawlID(MultiProtocolURL url, Date date, int count) {
         String id = url.getHost();
         if (id.length() > 80) id = id.substring(0, 80) + "-" + id.hashCode();
-        id = id + "-" + DateParser.secondDateFormat.format(date).replace(':', '-').replace(' ', '-');
+        id = id + "-" + DateParser.secondDateFormat.format(date).replace(':', '-').replace(' ', '-') + "-" + count;
         return id;
     }
     

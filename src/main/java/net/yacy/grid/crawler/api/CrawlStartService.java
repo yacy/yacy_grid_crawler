@@ -83,10 +83,11 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         Date now = new Date();
         // start the crawls; each of the url in a separate crawl to enforce parallel loading from different hosts
         SusiThought allCrawlstarts = new SusiThought();
+        int count = 0;
         for (MultiProtocolURL url: crawlstartURLs.getURLs()) {
             JSONObject singlecrawl = new JSONObject();
             for (String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
-            singlecrawl.put("id", Crawler.getCrawlID(url, now));
+            singlecrawl.put("id", Crawler.getCrawlID(url, now, count++));
             //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
             
             try {
