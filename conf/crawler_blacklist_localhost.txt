@@ -1,0 +1,9 @@
+# Blacklist for local, private or intranet URLs
+
+.*?//localhost.*                     # Localhost host name
+.*?//127\..*                          # Localhost IPv4
+.*?//10\..*                           # Private IPv4 Class A Network 10.x.x.x
+.*?//172\.(1[6-9]|2[0-9]|3[0-1])\..*  # Private IPv4 Class B Network 172.16.0.0 .. 172.31.255.255
+.*?//192\.168\..*                     # Private IPv4 Class C Network 192.168.0.0 .. 192.168.255.255
+.*?//^::1.*                           # Localhost IPv6
+.*?//[fF][cCdD].*                     # IPv6 User Local Address Space

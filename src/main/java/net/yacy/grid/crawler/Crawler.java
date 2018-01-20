@@ -20,9 +20,11 @@
 package net.yacy.grid.crawler;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.servlet.Servlet;
 
@@ -114,7 +117,7 @@ public class Crawler {
     public static class CrawlerListener extends AbstractBrokerListener implements BrokerListener {
 
         public CrawlerListener(YaCyServices service) {
-            super(service, 1 /*Runtime.getRuntime().availableProcessors()*/);
+            super(service, Runtime.getRuntime().availableProcessors());
         }
 
         @Override
@@ -215,8 +218,14 @@ public class Crawler {
                                 Integer urlhash = url.hashCode();
                                 if (!doublecache.doubleHashes.contains(urlhash)) {
                                     doublecache.doubleHashes.add(urlhash);
-                                    // add url to next stack
-                                    nextList.add(u);
+                                    // finally check the blacklist
+                                    BlacklistInfo blacklistInfo = isBlacklistedCrawler(u);
+                                    if (blacklistInfo == null) {
+                                        // add url to next stack
+                                        nextList.add(u);
+                                    } else {
+                                        Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.pattern.toString() + "' removed url '" + u + "' from crawl list:  " + blacklistInfo.info);
+                                    }
                                 }
                             }
                         }
@@ -411,6 +420,26 @@ public class Crawler {
         return id;
     }
     
+    private static List<BlacklistInfo> blacklist_crawler = new ArrayList<>();
+    
+    private final static class BlacklistInfo {
+        public Pattern pattern;
+        public String source;
+        public String info;
+        public BlacklistInfo(String patternString, String source, String info) throws PatternSyntaxException {
+            this.pattern = Pattern.compile(patternString);
+            this.source = source;
+            this.info = info;
+        }
+    }
+    
+    public static BlacklistInfo isBlacklistedCrawler(String url) {
+        for (BlacklistInfo bi: blacklist_crawler) {
+            if (bi.pattern.matcher(url).matches()) return bi;
+        }
+        return null;
+    }
+    
     public static void main(String[] args) {
         // initialize environment variables
         List<Class<? extends Servlet>> services = new ArrayList<>();
@@ -422,9 +451,53 @@ public class Crawler {
         BrokerListener brokerListener = new CrawlerListener(CRAWLER_SERVICE);
         new Thread(brokerListener).start();
 
-        // start server
+        // initialize data
         Data.logger.info("started Crawler");
         Data.logger.info(new GitTool().toString());
+        
+        // read global blacklists
+        String grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist");
+        String[] crawler_blacklist_names = grid_crawler_blacklist.split(",");
+        for (String crawler_blacklist_name: crawler_blacklist_names) {
+            File f = new File(Data.gridServicePath, "conf/" + crawler_blacklist_name.trim());
+            if (!f.exists()) f = new File("conf/" + crawler_blacklist_name.trim());
+            if (!f.exists()) continue;
+            try {
+                Files.lines(f.toPath(), StandardCharsets.UTF_8).forEach(line -> {
+                    line = line.trim();
+                    int p = line.indexOf(" #");
+                    String info = "";
+                    if (p >= 0) {
+                        info = line.substring(p + 1).trim();
+                        line = line.substring(0, p);
+                    }
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        if (line.startsWith("host ")) {
+                            try {
+                                BlacklistInfo bi = new BlacklistInfo(".*?//" + line.substring(5).trim() + "/.*", crawler_blacklist_name, info);
+                                blacklist_crawler.add(bi);
+                            } catch (PatternSyntaxException e) {
+                                Data.logger.warn("regex for host in file " + crawler_blacklist_name + " cannot be compiled: " + line.substring(5).trim());
+                            }
+                        } else {
+                            try {
+                                BlacklistInfo bi = new BlacklistInfo(line, crawler_blacklist_name, info);
+                                blacklist_crawler.add(bi);
+                            } catch (PatternSyntaxException e) {
+                                Data.logger.warn("regex for url in file " + crawler_blacklist_name + " cannot be compiled: " + line);
+                            }
+                        }
+                    }
+                });
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        Data.logger.info("loaded " + blacklist_crawler.size() + " blacklist entries for the crawler");
+        
+        // start server
         Service.runService(null);
         brokerListener.terminate();
     }
