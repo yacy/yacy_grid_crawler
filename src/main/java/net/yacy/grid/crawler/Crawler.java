@@ -37,6 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -459,6 +460,7 @@ public class Crawler {
             if (!f.exists()) f = new File("conf/" + name.trim());
             if (!f.exists()) continue;
             try {
+                final AtomicInteger counter = new AtomicInteger(0);
                 Files.lines(f.toPath(), StandardCharsets.UTF_8).forEach(line -> {
                     line = line.trim();
                     int p = line.indexOf(" #");
@@ -473,6 +475,7 @@ public class Crawler {
                             try {
                                 BlacklistInfo bi = new BlacklistInfo(".*?//" + line.substring(5).trim() + "/.*", name, info);
                                 blacklist.add(bi);
+                                counter.incrementAndGet();
                             } catch (PatternSyntaxException e) {
                                 Data.logger.warn("regex for host in file " + name + " cannot be compiled: " + line.substring(5).trim());
                             }
@@ -480,12 +483,14 @@ public class Crawler {
                             try {
                                 BlacklistInfo bi = new BlacklistInfo(line, name, info);
                                 blacklist.add(bi);
+                                counter.incrementAndGet();
                             } catch (PatternSyntaxException e) {
                                 Data.logger.warn("regex for url in file " + name + " cannot be compiled: " + line);
                             }
                         }
                     }
                 });
+                Data.logger.info("loaded " + counter.get() + " blacklist entries from file " + name);
             } catch (IOException e) {
                 Data.logger.warn("", e);
             }
