@@ -224,7 +224,7 @@ public class Crawler {
                                         // add url to next stack
                                         nextList.add(u);
                                     } else {
-                                        Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.pattern.toString() + "' removed url '" + u + "' from crawl list:  " + blacklistInfo.info);
+                                        Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.pattern.toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
                                     }
                                 }
                             }
@@ -239,7 +239,10 @@ public class Crawler {
                 indexNoIndex[0] = new ArrayList<>(); // for: index
                 indexNoIndex[1] = new ArrayList<>(); // for: no-Index
                 nextList.forEach(url -> {
-                    if (indexmustmatch.matcher(url).matches() && !indexmustnotmatch.matcher(url).matches()) {
+                    boolean indexConstratntFromCrawlProfil = indexmustmatch.matcher(url).matches() && !indexmustnotmatch.matcher(url).matches();
+                    BlacklistInfo blacklistInfo = isBlacklistedIndexer(url);
+                    boolean indexConstraintFromBlacklist = blacklistInfo == null;
+                    if (indexConstratntFromCrawlProfil && indexConstraintFromBlacklist) {
                         indexNoIndex[0].add(url);
                     } else {
                         indexNoIndex[1].add(url);
@@ -421,23 +424,73 @@ public class Crawler {
     }
     
     private static List<BlacklistInfo> blacklist_crawler = new ArrayList<>();
+    private static List<BlacklistInfo> blacklist_indexer = new ArrayList<>();
     
     private final static class BlacklistInfo {
-        public Pattern pattern;
-        public String source;
-        public String info;
-        public BlacklistInfo(String patternString, String source, String info) throws PatternSyntaxException {
+        public final Pattern pattern;
+        public final String source;
+        public final String info;
+        public BlacklistInfo(final String patternString, final String source, final String info) throws PatternSyntaxException {
             this.pattern = Pattern.compile(patternString);
             this.source = source;
             this.info = info;
         }
     }
-    
+
     public static BlacklistInfo isBlacklistedCrawler(String url) {
         for (BlacklistInfo bi: blacklist_crawler) {
             if (bi.pattern.matcher(url).matches()) return bi;
         }
         return null;
+    }
+    
+    public static BlacklistInfo isBlacklistedIndexer(String url) {
+        for (BlacklistInfo bi: blacklist_indexer) {
+            if (bi.pattern.matcher(url).matches()) return bi;
+        }
+        return null;
+    }
+    
+    private static List<BlacklistInfo> loadBlacklists(String names) {
+        String[] names_list = names.split(",");
+        List<BlacklistInfo> blacklist = new ArrayList<>();
+        for (String name: names_list) {
+            File f = new File(Data.gridServicePath, "conf/" + name.trim());
+            if (!f.exists()) f = new File("conf/" + name.trim());
+            if (!f.exists()) continue;
+            try {
+                Files.lines(f.toPath(), StandardCharsets.UTF_8).forEach(line -> {
+                    line = line.trim();
+                    int p = line.indexOf(" #");
+                    String info = "";
+                    if (p >= 0) {
+                        info = line.substring(p + 1).trim();
+                        line = line.substring(0, p);
+                    }
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        if (line.startsWith("host ")) {
+                            try {
+                                BlacklistInfo bi = new BlacklistInfo(".*?//" + line.substring(5).trim() + "/.*", name, info);
+                                blacklist.add(bi);
+                            } catch (PatternSyntaxException e) {
+                                Data.logger.warn("regex for host in file " + name + " cannot be compiled: " + line.substring(5).trim());
+                            }
+                        } else {
+                            try {
+                                BlacklistInfo bi = new BlacklistInfo(line, name, info);
+                                blacklist.add(bi);
+                            } catch (PatternSyntaxException e) {
+                                Data.logger.warn("regex for url in file " + name + " cannot be compiled: " + line);
+                            }
+                        }
+                    }
+                });
+            } catch (IOException e) {
+                Data.logger.warn("", e);
+            }
+        }
+        return blacklist;
     }
     
     public static void main(String[] args) {
@@ -457,45 +510,11 @@ public class Crawler {
         
         // read global blacklists
         String grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist");
-        String[] crawler_blacklist_names = grid_crawler_blacklist.split(",");
-        for (String crawler_blacklist_name: crawler_blacklist_names) {
-            File f = new File(Data.gridServicePath, "conf/" + crawler_blacklist_name.trim());
-            if (!f.exists()) f = new File("conf/" + crawler_blacklist_name.trim());
-            if (!f.exists()) continue;
-            try {
-                Files.lines(f.toPath(), StandardCharsets.UTF_8).forEach(line -> {
-                    line = line.trim();
-                    int p = line.indexOf(" #");
-                    String info = "";
-                    if (p >= 0) {
-                        info = line.substring(p + 1).trim();
-                        line = line.substring(0, p);
-                    }
-                    line = line.trim();
-                    if (!line.isEmpty() && !line.startsWith("#")) {
-                        if (line.startsWith("host ")) {
-                            try {
-                                BlacklistInfo bi = new BlacklistInfo(".*?//" + line.substring(5).trim() + "/.*", crawler_blacklist_name, info);
-                                blacklist_crawler.add(bi);
-                            } catch (PatternSyntaxException e) {
-                                Data.logger.warn("regex for host in file " + crawler_blacklist_name + " cannot be compiled: " + line.substring(5).trim());
-                            }
-                        } else {
-                            try {
-                                BlacklistInfo bi = new BlacklistInfo(line, crawler_blacklist_name, info);
-                                blacklist_crawler.add(bi);
-                            } catch (PatternSyntaxException e) {
-                                Data.logger.warn("regex for url in file " + crawler_blacklist_name + " cannot be compiled: " + line);
-                            }
-                        }
-                    }
-                });
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
+        blacklist_crawler = loadBlacklists(grid_crawler_blacklist);
         Data.logger.info("loaded " + blacklist_crawler.size() + " blacklist entries for the crawler");
+        String grid_indexer_blacklist = Data.config.get("grid.indexer.blacklist");
+        blacklist_indexer = loadBlacklists(grid_indexer_blacklist);
+        Data.logger.info("loaded " + blacklist_indexer.size() + " blacklist entries for the indexer");
         
         // start server
         Service.runService(null);
