@@ -439,17 +439,21 @@ public class Crawler {
         }
     }
     
-    private final static ConcurrentARC<String, BlacklistInfo> blacklistCache = new ConcurrentARC<>(100000, Runtime.getRuntime().availableProcessors());
+    private final static ConcurrentARC<String, BlacklistInfo> blacklistHitCache = new ConcurrentARC<>(100000, Runtime.getRuntime().availableProcessors());
+    private final static ConcurrentARC<String, Boolean> blacklistMissCache = new ConcurrentARC<>(100000, Runtime.getRuntime().availableProcessors());
 
     public static BlacklistInfo isBlacklistedCrawler(String url) {
-    	BlacklistInfo cachedBI = blacklistCache.get(url);
+    	BlacklistInfo cachedBI = blacklistHitCache.get(url);
     	if (cachedBI != null) return cachedBI;
+    	Boolean cachedMiss = blacklistMissCache.get(url);
+    	if (cachedMiss != null) return null;
         for (BlacklistInfo bi: blacklist_crawler) {
             if (bi.pattern.matcher(url).matches()) {
-            	blacklistCache.put(url, bi);
+            	blacklistHitCache.put(url, bi);
             	return bi;
             }
         }
+        blacklistMissCache.put(url, Boolean.TRUE);
         return null;
     }
     
