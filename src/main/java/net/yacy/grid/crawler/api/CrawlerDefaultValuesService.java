@@ -73,6 +73,7 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         defaultValues.put("xsstopw", "off");
         defaultValues.put("collection", "user");
         defaultValues.put("agentName", "");
+        defaultValues.put("priority", "0");
     }
     
     @Override

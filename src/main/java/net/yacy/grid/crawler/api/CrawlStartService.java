@@ -30,7 +30,6 @@ import org.json.JSONObject;
 
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
-import net.yacy.grid.QueueName;
 import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.Crawler;
 import net.yacy.grid.crawler.Crawler.CrawlstartURLSplitter;
@@ -39,6 +38,7 @@ import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
 import net.yacy.grid.io.index.WebMapping;
+import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
 import net.yacy.grid.tools.JSONList;
@@ -91,7 +91,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
             
             try {
-                QueueName queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, url.getHost());
+                GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, Crawler.PRIORITY_DIMENSIONS, 0, url.getHost());
                 SusiThought json = new SusiThought();
                 json.setData(new JSONArray().put(singlecrawl));
                 JSONObject action = new JSONObject()
