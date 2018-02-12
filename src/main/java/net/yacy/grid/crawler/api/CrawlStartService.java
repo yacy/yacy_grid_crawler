@@ -48,6 +48,7 @@ import net.yacy.grid.tools.MultiProtocolURL;
  * 
  * Test URL:
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net&indexmustnotmatch=.*Mitmachen.*&mustmatch=.*yacy.net.*
+ * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=ix.de&crawlingDepth=6&priority=true
  */
 public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
@@ -91,7 +92,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
             
             try {
-                GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, Crawler.PRIORITY_DIMENSIONS, 0, url.getHost());
+                GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.BALANCE, Crawler.CRAWLER_PRIORITY_DIMENSIONS, singlecrawl.getInt("priority"), url.getHost());
                 SusiThought json = new SusiThought();
                 json.setData(new JSONArray().put(singlecrawl));
                 JSONObject action = new JSONObject()

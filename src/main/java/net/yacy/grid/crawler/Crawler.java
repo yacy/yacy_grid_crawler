@@ -72,8 +72,22 @@ public class Crawler {
 
     private final static YaCyServices CRAWLER_SERVICE = YaCyServices.crawler;
     private final static String DATA_PATH = "data";
-    public final static int[] PRIORITY_DIMENSIONS = new int[] {YaCyServices.crawler.getQueues().length - 1, 1};
+    public static int[] CRAWLER_PRIORITY_DIMENSIONS = YaCyServices.crawler.getQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.crawler.getQueues().length - 1, 1};
+    public static int[] LOADER_PRIORITY_DIMENSIONS = YaCyServices.loader.getQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.loader.getQueues().length - 1, 1};
+    public static int[] PARSER_PRIORITY_DIMENSIONS = YaCyServices.parser.getQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.parser.getQueues().length - 1, 1};
+    public static int[] INDEXER_PRIORITY_DIMENSIONS = YaCyServices.indexer.getQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.indexer.getQueues().length - 1, 1};
  
+    public static void initPriorityQueue(int priorityDimension) {
+        CRAWLER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.crawler, priorityDimension);
+        LOADER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.loader, priorityDimension);
+        PARSER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.parser, priorityDimension);
+        INDEXER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.indexer, priorityDimension);
+    }
+    
+    private static int[] priorityDimensions(YaCyServices service, int d) {
+        return service.getQueues().length <= d ? new int[] {service.getQueues().length, 0} : new int[] {service.getQueues().length - d, d};
+    }
+    
     // define services
     @SuppressWarnings("unchecked")
     public final static Class<? extends Servlet>[] CRAWLER_SERVICES = new Class[]{
@@ -138,9 +152,7 @@ public class Crawler {
 
             int depth = crawlaction.getIntAttr("depth");
             int crawlingDepth = crawl.getInt("crawlingDepth");
-            String priorityString = crawl.getString("priority");
-            int priority = "false".equals(priorityString) ? 0 : "true".equals(priorityString) ? 1 : Integer.parseInt(priorityString);
-
+            int priority =  crawl.has("priority") ? crawl.getInt("priority") : 0;
             // check depth (this check should be deprecated because we limit by omitting the crawl message at crawl tree leaves)
             if (depth > crawlingDepth) {
                 // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
@@ -340,7 +352,7 @@ public class Crawler {
         assert doIndexing || doCrawling; // one or both must be true; doing none of that does not make sense
         // if all of the urls shall be indexed (see indexing patterns) then do indexing actions
         if (doIndexing) {
-            GridQueue indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.BALANCE, PRIORITY_DIMENSIONS, priority, hashKey);
+            GridQueue indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getQueues(), ShardingMethod.BALANCE, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.indexer.name())
                 .put("queue", indexerQueueName.name())
@@ -350,7 +362,7 @@ public class Crawler {
         }
         // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
         if (doCrawling) {
-            GridQueue crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.LOOKUP, PRIORITY_DIMENSIONS, priority, hashKey);
+            GridQueue crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.BALANCE, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.crawler.name())
                 .put("queue", crawlerQueueName.name())
@@ -361,7 +373,7 @@ public class Crawler {
         }
         
         // bevor that and after loading we have a parsing action
-        GridQueue parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.BALANCE, PRIORITY_DIMENSIONS, priority, hashKey);
+        GridQueue parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.BALANCE, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONArray parserActions = new JSONArray().put(new JSONObject(true)
                 .put("type", YaCyServices.parser.name())
                 .put("queue", parserQueueName.name())
@@ -372,7 +384,7 @@ public class Crawler {
                 .put("actions", postParserActions)); // actions after parsing
         
         // at the beginning of the process, we do a loading.
-        GridQueue loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, PRIORITY_DIMENSIONS, priority, hashKey);
+        GridQueue loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONObject loaderAction = new JSONObject(true)
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())
@@ -527,6 +539,9 @@ public class Crawler {
         // initialize data
         Data.logger.info("started Crawler");
         Data.logger.info(new GitTool().toString());
+        
+        int priorityQueues = Integer.parseInt(Data.config.get("grid.indexer.priorityQueues"));
+        initPriorityQueue(priorityQueues);
         
         // read global blacklists
         String grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist");
