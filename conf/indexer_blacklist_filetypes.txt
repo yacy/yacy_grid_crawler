@@ -1,6 +1,6 @@
 # Indexing Blacklist for bad file types
 
-.*\.xml         # Reject XML in search index
-.*\.css         # Reject CSS in search index
-.*\.js          # Reject JavaScript in search index
-.*/robots\.txt  # Reject robots.txt
+.*?\.xml         # Reject XML in search index
+.*?\.css         # Reject CSS in search index
+.*?\.js          # Reject JavaScript in search index
+.*?/robots\.txt  # Reject robots.txt
