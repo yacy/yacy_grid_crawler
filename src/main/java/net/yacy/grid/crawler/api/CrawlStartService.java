@@ -102,7 +102,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                         .put("depth", 0)
                         .put("sourcegraph", "rootasset");
                 SusiAction crawlAction = new SusiAction(action);
-                JSONObject graph = new JSONObject(true).put(WebMapping.canonical_s.getSolrFieldName(), url.toNormalform(true));
+                JSONObject graph = new JSONObject(true).put(WebMapping.canonical_s.getMapping().name(), url.toNormalform(true));
                 crawlAction.setJSONListAsset("rootasset", new JSONList().add(graph));
                 json.addAction(crawlAction);
                 allCrawlstarts.addAction(crawlAction);

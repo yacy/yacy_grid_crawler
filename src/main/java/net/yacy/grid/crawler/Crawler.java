@@ -242,7 +242,7 @@ public class Crawler {
                     JSONObject json = jsonlist.get(line);
                     if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
 
-                    String sourceurl = json.has(WebMapping.url_s.getSolrFieldName()) ? json.getString(WebMapping.url_s.getSolrFieldName()) : "";
+                    String sourceurl = json.has(WebMapping.url_s.getMapping().name()) ? json.getString(WebMapping.url_s.getMapping().name()) : "";
                     Set<MultiProtocolURL> graph = new HashSet<>();
                     String graphurl = json.has(WebMapping.canonical_s.name()) ? json.getString(WebMapping.canonical_s.name()) : null;
                     if (graphurl != null) try {
