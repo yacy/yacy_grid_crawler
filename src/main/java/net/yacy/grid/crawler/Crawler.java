@@ -50,6 +50,8 @@ import net.yacy.grid.YaCyServices;
 import net.yacy.grid.crawler.api.CrawlStartService;
 import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
 import net.yacy.grid.io.assets.Asset;
+import net.yacy.grid.io.index.CrawlerDocument;
+import net.yacy.grid.io.index.CrawlerDocument.Status;
 import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
@@ -60,6 +62,7 @@ import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
 import net.yacy.grid.tools.Classification.ContentDomain;
 import net.yacy.grid.tools.DateParser;
+import net.yacy.grid.tools.Digest;
 import net.yacy.grid.tools.GitTool;
 import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
@@ -310,9 +313,26 @@ public class Crawler {
                     }
                 });
 
-                long timestamp = System.currentTimeMillis();
-                
+                Date now = new Date();
+                long timestamp = now.getTime();
+                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 for (int ini = 0; ini < 2; ini++) {
+
+                    // write crawler index entries
+                    for (String u: indexNoIndex[ini]) {
+                        CrawlerDocument crawlStatus = new CrawlerDocument();
+                        crawlStatus
+                            .setCrawlId(id)
+                            .setURL(u)
+                            .setStatus(Status.created)
+                            .setInitDate(now)
+                            .setStatusDate(now)
+                            .setCollections(collections.keySet())
+                            .setComment("");
+                        String urlid = Digest.encodeMD5Hex(u);
+                        crawlStatus.store(Data.gridIndex, urlid);
+                    }
+                    
                     // create partitions
                     List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
 
