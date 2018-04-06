@@ -522,7 +522,7 @@ public class Crawler {
         List<Class<? extends Servlet>> services = new ArrayList<>();
         services.addAll(Arrays.asList(MCP.MCP_SERVICES));
         services.addAll(Arrays.asList(CRAWLER_SERVICES));
-        Service.initEnvironment(CRAWLER_SERVICE, services, DATA_PATH);
+        Service.initEnvironment(CRAWLER_SERVICE, services, DATA_PATH, false);
 
         // read global blacklists
         String[] grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist").split(",");
