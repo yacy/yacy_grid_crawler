@@ -71,8 +71,8 @@ import net.yacy.grid.tools.MultiProtocolURL;
  * The Crawler main class
  * 
  * performance debugging:
- * http://localhost:8300/yacy/grid/mcp/info/threaddump.txt
- * http://localhost:8300/yacy/grid/mcp/info/threaddump.txt?count=100
+ * http://localhost:8200/yacy/grid/mcp/info/threaddump.txt
+ * http://localhost:8200/yacy/grid/mcp/info/threaddump.txt?count=100
  */
 public class Crawler {
 
@@ -393,7 +393,7 @@ public class Crawler {
     
     /**
      * Create a new loader action. This action contains all follow-up actions after
-     * loading to create a steeing of parser, indexing and follow-up crawler actions.
+     * loading to create a steering of parser, indexing and follow-up crawler actions.
      * @param id the crawl id
      * @param urls the urls which are part of the same actions
      * @param depth the depth of the crawl step (0 is start depth)
