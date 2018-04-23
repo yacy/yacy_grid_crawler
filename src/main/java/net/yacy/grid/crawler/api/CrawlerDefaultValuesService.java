@@ -31,10 +31,10 @@ import net.yacy.grid.http.ServiceResponse;
 /**
  * 
  * Test URL:
- * http://localhost:8200/yacy/grid/crawler/defaultValues.json
+ * http://localhost:8300/yacy/grid/crawler/defaultValues.json
  * 
  * Test command:
- * curl http://localhost:8200/yacy/grid/crawler/defaultValues.json
+ * curl http://localhost:8300/yacy/grid/crawler/defaultValues.json
  */
 public class CrawlerDefaultValuesService extends ObjectAPIHandler implements APIHandler {
 
