@@ -1,5 +1,13 @@
-/classes/
+classes/
+target/
+data/
+/class/
 /.gradle/
 /build/
-/bin/
-/data/
+.DS_Store
+.settings
+.idea/
+bin/ai/
+bin/log4j.properties
+bin/net/
+bin/org/
