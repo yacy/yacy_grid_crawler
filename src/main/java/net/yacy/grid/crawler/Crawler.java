@@ -341,10 +341,9 @@ public class Crawler {
                             .setStatusDate(now)
                             .setCollections(collections.keySet())
                             .setComment("");
-                        String urlid = Digest.encodeMD5Hex(u);
-                        crawlStatus.store(Data.gridIndex, urlid);
+                        crawlStatus.store(Data.gridIndex);
                     }
-                    
+
                     // create partitions
                     List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
 
