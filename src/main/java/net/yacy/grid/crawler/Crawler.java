@@ -52,6 +52,7 @@ import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.CrawlerDocument;
 import net.yacy.grid.io.index.CrawlerDocument.Status;
+import net.yacy.grid.io.index.GridIndex;
 import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
@@ -235,6 +236,10 @@ public class Crawler {
                 Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
                 String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
                 Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
+
+                Date now = new Date();
+                long timestamp = now.getTime();
+                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 
                 // For each of the parsed document, there is a target graph.
                 // The graph contains all url elements which may appear in a document.
@@ -277,28 +282,44 @@ public class Crawler {
                         if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
                             // check if the url shall be loaded using the constraints
                             String u = url.toNormalform(true);
-                            
-                            // check matcher rules
-                            if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
-                                continue urlcheck;
-                            }
-                            
                             String urlid = Digest.encodeMD5Hex(u);
-                                
+
                             // check with the fast double cache
                             if (doublecache.doubleHashes.contains(urlid)) {
                                 continue urlcheck;
                             }
                             doublecache.doubleHashes.add(urlid);
+
+                            // double-check with the elastic index
+                            if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
+                                continue urlcheck;
+                            }
                             
+                            // prepare status document
+                            CrawlerDocument crawlStatus = new CrawlerDocument()
+                                    .setCrawlId(crawlID)
+                                    .setURL(u)
+                                    .setInitDate(now)
+                                    .setStatusDate(now)
+                                    .setCollections(collections.keySet());                          
+                                
+                            // check matcher rules
+                            if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
+                                crawlStatus
+                                    .setStatus(Status.rejected)
+                                    .setComment(!mustmatch.matcher(u).matches() ? "url does not match must-match filter " + mustmatchs : "url matches mustnotmatch filter " + mustnotmatchs);
+                                crawlStatus.store(Data.gridIndex);
+                                continue urlcheck;
+                            }
+
                             // check blacklist
                             Blacklist.BlacklistInfo blacklistInfo = blacklist_crawler.isBlacklisted(u, url);
                             if (blacklistInfo != null) {
                                 Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
-                            }
-
-                            // check with the elastic index
-                            if (Data.gridIndex.exist("crawler", "event", urlid)) {
+                                crawlStatus
+                                    .setStatus(Status.rejected)
+                                    .setComment("url matches blacklist");
+                                crawlStatus.store(Data.gridIndex);
                                 continue urlcheck;
                             }
                                 
@@ -326,9 +347,6 @@ public class Crawler {
                     }
                 });
 
-                Date now = new Date();
-                long timestamp = now.getTime();
-                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 for (int ini = 0; ini < 2; ini++) {
 
                     // write crawler index entries
