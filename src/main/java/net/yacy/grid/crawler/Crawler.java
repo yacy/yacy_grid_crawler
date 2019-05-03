@@ -361,7 +361,7 @@ public class Crawler {
                             .setInitDate(now)
                             .setStatusDate(now)
                             .setCollections(collections.keySet())
-                            .setComment("");
+                            .setComment(ini == 0 ? "to be indexed" : "noindex, just for crawling");
                         crawlStatus.store(Data.gridIndex);
                     }
 
@@ -395,7 +395,7 @@ public class Crawler {
             }
         }
     }
-    
+
     private static List<JSONArray> createPartition(Collection<String> urls, int partitionSize) {
         List<JSONArray> partitions = new ArrayList<>();
         urls.forEach(url -> {

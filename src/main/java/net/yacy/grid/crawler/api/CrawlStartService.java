@@ -43,6 +43,7 @@ import net.yacy.grid.io.index.CrawlerDocument;
 import net.yacy.grid.io.index.CrawlerMapping;
 import net.yacy.grid.io.index.CrawlerDocument.Status;
 import net.yacy.grid.io.index.CrawlstartDocument;
+import net.yacy.grid.io.index.CrawlstartMapping;
 import net.yacy.grid.io.index.GridIndex;
 import net.yacy.grid.io.index.Index.QueryLanguage;
 import net.yacy.grid.io.index.WebMapping;
@@ -122,17 +123,22 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 // crawler is restarted.
                 // Because 'old' crawls may block new ones we identify possible blocking entries using the mustmatch pattern.
                 // We therefore delete all entries with the same mustmatch pattern before a crawl starts.
-                Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch + "\"}");
-                CrawlerDocument crawlerDoc = new CrawlerDocument()
-                        .setCrawlId(crawl_id)
-                        .setMustmatch(mustmatch)
-                        .setCollections(collections.keySet())
-                        .setUrl(starturl)
-                        .setInitDate(now)
-                        .setStatusDate(now)
-                        .setStatus(Status.created)
-                        .setComment("Crawl start root");
-                crawlerDoc.store(Data.gridIndex);
+                if (mustmatch.equals(".*")) {
+                    // we cannot delete all wide crawl status urls!
+                    JSONList old_crawls = Data.gridIndex.query(GridIndex.CRAWLSTART_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlstartMapping.start_s.name() + "\":\"" + starturl + "\"}", 0, 100);
+                    // from there we pick out the crawl start id and delete using them
+                    for (Object j: old_crawls.toArray()) {
+                        String crawlid = ((JSONObject) j).optString(CrawlstartMapping.crawl_id_s.name());
+                        if (crawlid.length() > 0) {
+                            Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.crawl_id_s.name() + "\":\"" + crawlid + "\"}");
+                        }
+                    }
+                } else {
+                    // this should fit exactly on the old urls
+                    Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch + "\"}");
+                }
+                // we do not create a crawler document entry here because that would conflict with the double check.
+                // crawler documents must be written after the double check has happened.
 
                 // create a crawl queue entry
                 GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.BALANCE, Crawler.CRAWLER_PRIORITY_DIMENSIONS, singlecrawl.getInt("priority"), url.getHost());
