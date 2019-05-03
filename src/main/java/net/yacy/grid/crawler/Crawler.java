@@ -237,11 +237,13 @@ public class Crawler {
                 String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
                 Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
 
+                Date now = new Date();
+                long timestamp = now.getTime();
+                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
+
                 // For each of the parsed document, there is a target graph.
                 // The graph contains all url elements which may appear in a document.
                 // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
-                Date now = new Date();
-                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 Set<String> nextList = new HashSet<>();
                 Blacklist blacklist_crawler = getBlacklistCrawler(processName, processNumber);
                 graphloop: for (int line = 0; line < jsonlist.length(); line++) {
@@ -276,16 +278,12 @@ public class Crawler {
                     final DoubleCache doublecache = doubles.get(crawlID);
                     Data.logger.info("Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
                     urlcheck: for (MultiProtocolURL url: graph) {
+                        // prepare status document
                         ContentDomain cd = url.getContentDomainFromExt();
-                        CrawlerDocument crawlStatus = new CrawlerDocument()
-                                .setCrawlId(crawlID)
-                                .setInitDate(now)
-                                .setStatusDate(now)
-                                .setCollections(collections.keySet());
+
                         if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
                             // check if the url shall be loaded using the constraints
                             String u = url.toNormalform(true);
-                            crawlStatus.setUrl(u);
 
                             String urlid = Digest.encodeMD5Hex(u);
 
@@ -300,11 +298,19 @@ public class Crawler {
                                 continue urlcheck;
                             }
 
+                            // create new crawl status document
+                            CrawlerDocument crawlStatus = new CrawlerDocument()
+                                    .setCrawlId(crawlID)
+                                    .setInitDate(now)
+                                    .setStatusDate(now)
+                                    .setCollections(collections.keySet())
+                                    .setUrl(u);
+
                             // check matcher rules
                             if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
                                 crawlStatus
-                                        .setStatus(Status.rejected)
-                                        .setComment(!mustmatch.matcher(u).matches() ? "does not match mustmatch: " + mustmatch.toString() : "does not match mustnotmatch: " + mustnotmatch.toString());
+                                    .setStatus(Status.rejected)
+                                    .setComment(!mustmatch.matcher(u).matches() ? "url does not match must-match filter " + mustmatchs : "url matches mustnotmatch filter " + mustnotmatchs);
                                 crawlStatus.store(Data.gridIndex);
                                 continue urlcheck;
                             }
@@ -312,10 +318,10 @@ public class Crawler {
                             // check blacklist
                             Blacklist.BlacklistInfo blacklistInfo = blacklist_crawler.isBlacklisted(u, url);
                             if (blacklistInfo != null) {
-                                //Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
+                                Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
                                 crawlStatus
-                                        .setStatus(Status.rejected)
-                                        .setComment("url is blacklisted");
+                                    .setStatus(Status.rejected)
+                                    .setComment("url matches blacklist");
                                 crawlStatus.store(Data.gridIndex);
                                 continue urlcheck;
                             }
@@ -344,7 +350,6 @@ public class Crawler {
                     }
                 });
 
-                long timestamp = now.getTime();
                 for (int ini = 0; ini < 2; ini++) {
 
                     // write crawler index entries
