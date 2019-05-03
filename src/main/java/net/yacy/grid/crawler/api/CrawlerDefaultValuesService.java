@@ -80,7 +80,7 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
     public static JSONObject crawlStartDefaultClone() {
     	JSONObject json = new JSONObject(true);
     	defaultValues.keySet().forEach(key -> json.put(key, defaultValues.get(key)));
-        return defaultValues;
+        return json;
     }
     
     @Override
