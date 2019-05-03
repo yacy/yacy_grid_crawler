@@ -52,6 +52,7 @@ import net.yacy.grid.crawler.api.CrawlerDefaultValuesService;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.CrawlerDocument;
 import net.yacy.grid.io.index.CrawlerDocument.Status;
+import net.yacy.grid.io.index.GridIndex;
 import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
@@ -224,7 +225,7 @@ public class Crawler {
                     Data.logger.warn("Crawler.processAction could not read asset from storage: " + sourcegraph, e);
                     return false;
                 }
-                
+
                 // declare filter from the crawl profile
                 String mustmatchs = crawl.getString("mustmatch");
                 Pattern mustmatch = Pattern.compile(mustmatchs);
@@ -235,10 +236,12 @@ public class Crawler {
                 Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
                 String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
                 Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
-                
+
                 // For each of the parsed document, there is a target graph.
                 // The graph contains all url elements which may appear in a document.
                 // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
+                Date now = new Date();
+                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 Set<String> nextList = new HashSet<>();
                 Blacklist blacklist_crawler = getBlacklistCrawler(processName, processNumber);
                 graphloop: for (int line = 0; line < jsonlist.length(); line++) {
@@ -274,34 +277,49 @@ public class Crawler {
                     Data.logger.info("Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
                     urlcheck: for (MultiProtocolURL url: graph) {
                         ContentDomain cd = url.getContentDomainFromExt();
+                        CrawlerDocument crawlStatus = new CrawlerDocument()
+                                .setCrawlId(crawlID)
+                                .setInitDate(now)
+                                .setStatusDate(now)
+                                .setCollections(collections.keySet());
                         if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
                             // check if the url shall be loaded using the constraints
                             String u = url.toNormalform(true);
-                            
-                            // check matcher rules
-                            if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
-                                continue urlcheck;
-                            }
-                            
+                            crawlStatus.setUrl(u);
+
                             String urlid = Digest.encodeMD5Hex(u);
-                                
-                            // check with the fast double cache
+
+                            // double check with the fast double cache
                             if (doublecache.doubleHashes.contains(urlid)) {
                                 continue urlcheck;
                             }
                             doublecache.doubleHashes.add(urlid);
-                            
+
+                            // double check with the elastic index
+                            if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
+                                continue urlcheck;
+                            }
+
+                            // check matcher rules
+                            if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
+                                crawlStatus
+                                        .setStatus(Status.rejected)
+                                        .setComment(!mustmatch.matcher(u).matches() ? "does not match mustmatch: " + mustmatch.toString() : "does not match mustnotmatch: " + mustnotmatch.toString());
+                                crawlStatus.store(Data.gridIndex);
+                                continue urlcheck;
+                            }
+
                             // check blacklist
                             Blacklist.BlacklistInfo blacklistInfo = blacklist_crawler.isBlacklisted(u, url);
                             if (blacklistInfo != null) {
-                                Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
-                            }
-
-                            // check with the elastic index
-                            if (Data.gridIndex.exist("crawler", "event", urlid)) {
+                                //Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
+                                crawlStatus
+                                        .setStatus(Status.rejected)
+                                        .setComment("url is blacklisted");
+                                crawlStatus.store(Data.gridIndex);
                                 continue urlcheck;
                             }
-                                
+
                             // add url to next stack
                             nextList.add(u);
                         }
@@ -326,25 +344,22 @@ public class Crawler {
                     }
                 });
 
-                Date now = new Date();
                 long timestamp = now.getTime();
-                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
                 for (int ini = 0; ini < 2; ini++) {
 
                     // write crawler index entries
                     for (String u: indexNoIndex[ini]) {
                         CrawlerDocument crawlStatus = new CrawlerDocument()
                             .setCrawlId(crawlID)
-                            .setURL(u)
+                            .setUrl(u)
                             .setStatus(Status.created)
                             .setInitDate(now)
                             .setStatusDate(now)
                             .setCollections(collections.keySet())
                             .setComment("");
-                        String urlid = Digest.encodeMD5Hex(u);
-                        crawlStatus.store(Data.gridIndex, urlid);
+                        crawlStatus.store(Data.gridIndex);
                     }
-                    
+
                     // create partitions
                     List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
 
