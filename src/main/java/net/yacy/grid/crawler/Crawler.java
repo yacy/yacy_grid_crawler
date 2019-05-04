@@ -284,7 +284,6 @@ public class Crawler {
                         if (cd == ContentDomain.TEXT || cd == ContentDomain.ALL) {
                             // check if the url shall be loaded using the constraints
                             String u = url.toNormalform(true);
-
                             String urlid = Digest.encodeMD5Hex(u);
 
                             // double check with the fast double cache
@@ -292,11 +291,6 @@ public class Crawler {
                                 continue urlcheck;
                             }
                             doublecache.doubleHashes.add(urlid);
-
-                            // double check with the elastic index
-                            if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
-                                continue urlcheck;
-                            }
 
                             // create new crawl status document
                             CrawlerDocument crawlStatus = new CrawlerDocument()
@@ -315,7 +309,7 @@ public class Crawler {
                                 continue urlcheck;
                             }
 
-                            // check blacklist
+                            // check blacklist (this is costly because the blacklist is huge)
                             Blacklist.BlacklistInfo blacklistInfo = blacklist_crawler.isBlacklisted(u, url);
                             if (blacklistInfo != null) {
                                 Data.logger.info("Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
@@ -323,6 +317,11 @@ public class Crawler {
                                     .setStatus(Status.rejected)
                                     .setComment("url matches blacklist");
                                 crawlStatus.store(Data.gridIndex);
+                                continue urlcheck;
+                            }
+
+                            // double check with the elastic index (we do this late here because it is the most costly operation)
+                            if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
                                 continue urlcheck;
                             }
 
