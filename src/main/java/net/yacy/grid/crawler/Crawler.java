@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -244,7 +245,7 @@ public class Crawler {
                 // For each of the parsed document, there is a target graph.
                 // The graph contains all url elements which may appear in a document.
                 // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
-                Set<String> nextList = new HashSet<>();
+                Map<String, String> nextMap = new HashMap<>(); // a map from urlid to url
                 Blacklist blacklist_crawler = getBlacklistCrawler(processName, processNumber);
                 graphloop: for (int line = 0; line < jsonlist.length(); line++) {
                     JSONObject json = jsonlist.get(line);
@@ -321,16 +322,24 @@ public class Crawler {
                             }
 
                             // double check with the elastic index (we do this late here because it is the most costly operation)
-                            if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
-                                continue urlcheck;
-                            }
+                            //if (Data.gridIndex.exist(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, urlid)) {
+                            //    continue urlcheck;
+                            //}
 
                             // add url to next stack
-                            nextList.add(u);
+                            nextMap.put(urlid, u);
                         }
                     };
                     Data.logger.info("Crawler.processAction processed sub-graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
                 }
+
+                // fail fast
+                if (nextMap.isEmpty()) return true;
+
+                // make a double-check
+                Set<String> exist = Data.gridIndex.existBulk(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, nextMap.keySet());
+                for (String u: exist) nextMap.remove(u);
+                Collection<String> nextList = nextMap.values(); // a set of urls
 
                 // divide the nextList into two sub-lists, one which will reach the indexer and another one which will not cause indexing
                 @SuppressWarnings("unchecked")
