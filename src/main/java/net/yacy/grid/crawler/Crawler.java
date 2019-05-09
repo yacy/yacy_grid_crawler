@@ -228,26 +228,29 @@ public class Crawler {
                 }
 
                 // declare filter from the crawl profile
-                String mustmatchs = crawl.getString("mustmatch");
-                Pattern mustmatch = Pattern.compile(mustmatchs);
-                String mustnotmatchs = crawl.getString("mustnotmatch");
-                Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
+                final String mustmatchs = crawl.optString("mustmatch");
+                final Pattern mustmatch = Pattern.compile(mustmatchs);
+                final String mustnotmatchs = crawl.optString("mustnotmatch");
+                final Pattern mustnotmatch = Pattern.compile(mustnotmatchs);
                 // filter for indexing steering
-                String indexmustmatchs = crawl.getString("indexmustmatch");
-                Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
-                String indexmustnotmatchs = crawl.getString("indexmustnotmatch");
-                Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
+                final String indexmustmatchs = crawl.optString("indexmustmatch");
+                final Pattern indexmustmatch = Pattern.compile(indexmustmatchs);
+                final String indexmustnotmatchs = crawl.optString("indexmustnotmatch");
+                final Pattern indexmustnotmatch = Pattern.compile(indexmustnotmatchs);
+                // attributes for new crawl entries
+                final String collectionss = crawl.optString("collection");
+                final Map<String, Pattern> collections = WebMapping.collectionParser(collectionss);
+                final String start_url = crawl.optString("start_url");
+                final String start_ssld = crawl.optString("start_ssld");
 
-                Date now = new Date();
-                long timestamp = now.getTime();
-                final Map<String, Pattern> collections = WebMapping.collectionParser(crawl.optString("collection"));
-
+                final Date now = new Date();
+                final long timestamp = now.getTime();
                 // For each of the parsed document, there is a target graph.
                 // The graph contains all url elements which may appear in a document.
                 // In the following loop we collect all urls which may be of interest for the next depth of the crawl.
-                Map<String, String> nextMap = new HashMap<>(); // a map from urlid to url
-                Blacklist blacklist_crawler = getBlacklistCrawler(processName, processNumber);
-                List<CrawlerDocument> crawlerDocuments = new ArrayList<>();
+                final Map<String, String> nextMap = new HashMap<>(); // a map from urlid to url
+                final Blacklist blacklist_crawler = getBlacklistCrawler(processName, processNumber);
+                final List<CrawlerDocument> crawlerDocuments = new ArrayList<>();
                 graphloop: for (int line = 0; line < jsonlist.length(); line++) {
                     JSONObject json = jsonlist.get(line);
                     if (json.has("index")) continue graphloop; // this is an elasticsearch index directive, we just skip that
@@ -296,12 +299,14 @@ public class Crawler {
 
                             // create new crawl status document
                             CrawlerDocument crawlStatus = new CrawlerDocument()
-                                    .setCrawlId(crawlID)
-                                    .setInitDate(now)
-                                    .setStatusDate(now)
+                                    .setCrawlID(crawlID)
                                     .setMustmatch(mustmatchs)
                                     .setCollections(collections.keySet())
-                                    .setUrl(u);
+                                    .setCrawlstartURL(start_url)
+                                    .setCrawlstartSSLD(start_ssld)
+                                    .setInitDate(now)
+                                    .setStatusDate(now)
+                                    .setURL(u);
 
                             // check matcher rules
                             if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
@@ -364,13 +369,15 @@ public class Crawler {
                         // create crawler index entries
                         for (String u: indexNoIndex[ini]) {
                             CrawlerDocument crawlStatus = new CrawlerDocument()
-                                .setCrawlId(crawlID)
-                                .setUrl(u)
-                                .setStatus(Status.created)
+                                .setCrawlID(crawlID)
                                 .setMustmatch(mustmatchs)
+                                .setCollections(collections.keySet())
+                                .setCrawlstartURL(start_url)
+                                .setCrawlstartSSLD(start_ssld)
                                 .setInitDate(now)
                                 .setStatusDate(now)
-                                .setCollections(collections.keySet())
+                                .setStatus(Status.accepted)
+                                .setURL(u)
                                 .setComment(ini == 0 ? "to be indexed" : "noindex, just for crawling");
                             crawlerDocuments.add(crawlStatus);
                         }

@@ -39,9 +39,7 @@ import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
-import net.yacy.grid.io.index.CrawlerDocument;
 import net.yacy.grid.io.index.CrawlerMapping;
-import net.yacy.grid.io.index.CrawlerDocument.Status;
 import net.yacy.grid.io.index.CrawlstartDocument;
 import net.yacy.grid.io.index.CrawlstartMapping;
 import net.yacy.grid.io.index.GridIndex;
@@ -50,6 +48,7 @@ import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
+import net.yacy.grid.tools.Domains;
 import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
 
@@ -83,10 +82,9 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 JSONArray a = crawlstart.getJSONArray(key);
                 Object cv = call.get(key);
                 if (cv != null) crawlstart.put(key, cv);
+            } else {
+                System.out.println("unrecognized type: " + object.getClass().toString());
             }
-                else {
-                    System.out.println("unrecognized type: " + object.getClass().toString());
-                }
         }
         final String mustmatch = crawlstart.optString("mustmatch", "").trim();
         crawlstart.put("mustmatch", mustmatch);
@@ -102,18 +100,23 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             JSONObject singlecrawl = new JSONObject();
             for (String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
             String crawl_id = Crawler.getCrawlID(url, now, count++);
+            String start_url = url.toNormalform(true);
+            String start_ssld = Domains.getSmartSLD(url.getHost());
             singlecrawl.put("id", crawl_id);
-            String starturl = url.toNormalform(true);
+            singlecrawl.put("start_url", start_url);
+            singlecrawl.put("start_ssld", start_ssld);
+            
             //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
 
             try {
                 // Create a crawlstart index entry: this will keep track of all crawls that have been started.
                 // once such an entry is created, it is never changed or deleted again by any YaCy Grid process.
                 CrawlstartDocument crawlstartDoc = new CrawlstartDocument()
-                        .setCrawlId(crawl_id)
+                        .setCrawlID(crawl_id)
                         .setMustmatch(mustmatch)
                         .setCollections(collections.keySet())
-                        .setCrawlstartUrl(starturl)
+                        .setCrawlstartURL(start_url)
+                        .setCrawlstartSSLD(start_ssld)
                         .setInitDate(now)
                         .setData(singlecrawl);
                 crawlstartDoc.store(Data.gridIndex);
@@ -125,7 +128,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 // We therefore delete all entries with the same mustmatch pattern before a crawl starts.
                 if (mustmatch.equals(".*")) {
                     // we cannot delete all wide crawl status urls!
-                    JSONList old_crawls = Data.gridIndex.query(GridIndex.CRAWLSTART_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlstartMapping.start_s.name() + "\":\"" + starturl + "\"}", 0, 100);
+                    JSONList old_crawls = Data.gridIndex.query(GridIndex.CRAWLSTART_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlstartMapping.start_url_s.name() + "\":\"" + start_url + "\"}", 0, 100);
                     // from there we pick out the crawl start id and delete using them
                     for (Object j: old_crawls.toArray()) {
                         String crawlid = ((JSONObject) j).optString(CrawlstartMapping.crawl_id_s.name());
@@ -133,6 +136,9 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                             Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.crawl_id_s.name() + "\":\"" + crawlid + "\"}");
                         }
                     }
+                    // we also delete all entries with same start_url and start_ssld
+                    Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_url_s.name() + "\":\"" + start_url + "\"}");
+                    Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_ssld_s.name() + "\":\"" + start_ssld + "\"}");
                 } else {
                     // this should fit exactly on the old urls
                     Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch + "\"}");
@@ -151,7 +157,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                         .put("depth", 0)
                         .put("sourcegraph", "rootasset");
                 SusiAction crawlAction = new SusiAction(action);
-                JSONObject graph = new JSONObject(true).put(WebMapping.canonical_s.getMapping().name(), starturl);
+                JSONObject graph = new JSONObject(true).put(WebMapping.canonical_s.getMapping().name(), start_url);
                 crawlAction.setJSONListAsset("rootasset", new JSONList().add(graph));
                 json.addAction(crawlAction);
                 allCrawlstarts.addAction(crawlAction);
