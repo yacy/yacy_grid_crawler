@@ -91,11 +91,11 @@ public class Crawler {
         PARSER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.parser, priorityDimension);
         INDEXER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.indexer, priorityDimension);
     }
-    
+
     private static int[] priorityDimensions(YaCyServices service, int d) {
         return service.getQueues().length <= d ? new int[] {service.getQueues().length, 0} : new int[] {service.getQueues().length - d, d};
     }
-    
+
     // define services
     @SuppressWarnings("unchecked")
     public final static Class<? extends Servlet>[] CRAWLER_SERVICES = new Class[]{
@@ -110,7 +110,7 @@ public class Crawler {
             WebMapping.frames_sxt.name(),
             WebMapping.iframes_sxt.name()
     };
-    
+
     private final static Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
     private static long doublesLastCleanup = System.currentTimeMillis();
     private final static long doublesCleanupTimeout = 1000L * 60L * 60L * 24L * 7L; // cleanup after 7 days
@@ -123,7 +123,7 @@ public class Crawler {
             this.doubleHashes = ConcurrentHashMap.newKeySet();
         }
     }
-    
+
     private static void doDoubleCleanup() {
         long now = System.currentTimeMillis();
         if (now - doublesLastCleanup < doublesCleanupPeriod) return;
@@ -142,7 +142,7 @@ public class Crawler {
 
         private String[] blacklist_crawler_names_list, blacklist_indexer_names_list;
         private Map<String, Blacklist> blacklists_crawler, blacklists_indexer;
-        
+
         public CrawlerListener(YaCyServices service, String[] blacklist_crawler_names_list, String[] blacklist_indexer_names_list) {
             super(service, Runtime.getRuntime().availableProcessors());
             this.blacklist_crawler_names_list = blacklist_crawler_names_list;
@@ -167,7 +167,7 @@ public class Crawler {
             }
             return blacklist;
         }
-        
+
         private final Blacklist loadBlacklist(String[] names) {
             Blacklist blacklist = new Blacklist();
             for (String name: names) {
@@ -341,12 +341,12 @@ public class Crawler {
                 }
 
                 if (!nextMap.isEmpty()) {
-    
+
                     // make a double-check
                     Set<String> exist = Data.gridIndex.existBulk(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, nextMap.keySet());
                     for (String u: exist) nextMap.remove(u);
                     Collection<String> nextList = nextMap.values(); // a set of urls
-    
+
                     // divide the nextList into two sub-lists, one which will reach the indexer and another one which will not cause indexing
                     @SuppressWarnings("unchecked")
                     List<String>[] indexNoIndex = new List[2];
@@ -363,9 +363,9 @@ public class Crawler {
                             indexNoIndex[1].add(url);
                         }
                     });
-    
+
                     for (int ini = 0; ini < 2; ini++) {
-    
+
                         // create crawler index entries
                         for (String u: indexNoIndex[ini]) {
                             CrawlerDocument crawlStatus = new CrawlerDocument()
@@ -381,17 +381,17 @@ public class Crawler {
                                 .setComment(ini == 0 ? "to be indexed" : "noindex, just for crawling");
                             crawlerDocuments.add(crawlStatus);
                         }
-    
+
                         // create partitions
                         List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
-    
+
                         // create follow-up crawl to next depth
                         for (int pc = 0; pc < partitions.size(); pc++) {
                             JSONObject loaderAction = newLoaderAction(priority, crawlID, partitions.get(pc), depth, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
                             SusiThought nextjson = new SusiThought()
                                     .setData(data)
                                     .addAction(new SusiAction(loaderAction));
-    
+
                             // put a loader message on the queue
                             String message = nextjson.toString(2);
                             byte[] b = message.getBytes(StandardCharsets.UTF_8);
@@ -430,7 +430,7 @@ public class Crawler {
     }
 
     private final static String PATTERN_TIMEF = "MMddHHmmssSSS"; 
-    
+
     /**
      * Create a new loader action. This action contains all follow-up actions after
      * loading to create a steering of parser, indexing and follow-up crawler actions.
@@ -488,7 +488,7 @@ public class Crawler {
                 .put("sourcegraph", graphasset)
              );
         }
-        
+
         // bevor that and after loading we have a parsing action
         GridQueue parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getQueues(), ShardingMethod.BALANCE, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONArray parserActions = new JSONArray().put(new JSONObject(true)
@@ -499,7 +499,7 @@ public class Crawler {
                 .put("targetasset", webasset)
                 .put("targetgraph", graphasset)
                 .put("actions", postParserActions)); // actions after parsing
-        
+
         // at the beginning of the process, we do a loading.
         GridQueue loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getQueues(), ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONObject loaderAction = new JSONObject(true)
@@ -511,18 +511,18 @@ public class Crawler {
             .put("actions", parserActions); // actions after loading
         return loaderAction;
     }
-    
+
     private final static String intf(int i) {
        String s = Integer.toString(i);
        while (s.length() < 3) s = '0' + s;
        return s;
     }
-    
+
     public static class CrawlstartURLSplitter {
-        
+
         private List<MultiProtocolURL> crawlingURLArray;
         private List<String> badURLStrings;
-        
+
         public CrawlstartURLSplitter(String crawlingURLsString) {
             Data.logger.info("splitting url list: " + crawlingURLsString);
             crawlingURLsString = crawlingURLsString.replaceAll("\\|http", "\nhttp").replaceAll("%7Chttp", "\nhttp").replaceAll("%0D%0A", "\n").replaceAll("%0A", "\n").replaceAll("%0D", "\n").replaceAll(" ", "\n");
@@ -540,23 +540,23 @@ public class Crawler {
                 }
             }
         }
-        
+
         public List<MultiProtocolURL> getURLs() {
             return this.crawlingURLArray;
         }
-        
+
         public List<String> getBadURLs() {
             return this.badURLStrings;
         }
     }
-    
+
     public static String getCrawlID(MultiProtocolURL url, Date date, int count) {
         String id = url.getHost();
         if (id.length() > 80) id = id.substring(0, 80) + "-" + id.hashCode();
         id = id + "-" + DateParser.secondDateFormat.format(date).replace(':', '-').replace(' ', '-') + "-" + count;
         return id;
     }
-    
+
     public static void main(String[] args) {
         // initialize environment variables
         List<Class<? extends Servlet>> services = new ArrayList<>();
@@ -567,7 +567,7 @@ public class Crawler {
         // read global blacklists
         String[] grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist").split(",");
         String[] grid_indexer_blacklist = Data.config.get("grid.indexer.blacklist").split(",");
-        
+
         // start listener
         BrokerListener brokerListener = new CrawlerListener(CRAWLER_SERVICE, grid_crawler_blacklist, grid_indexer_blacklist);
         new Thread(brokerListener).start();
@@ -575,11 +575,10 @@ public class Crawler {
         // initialize data
         Data.logger.info("started Crawler");
         Data.logger.info(new GitTool().toString());
-        
+
         int priorityQueues = Integer.parseInt(Data.config.get("grid.indexer.priorityQueues"));
         initPriorityQueue(priorityQueues);
-        
-        
+
         // start server
         Service.runService(null);
         brokerListener.terminate();
