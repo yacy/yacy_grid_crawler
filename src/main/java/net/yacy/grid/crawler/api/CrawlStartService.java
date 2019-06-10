@@ -141,7 +141,8 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                     Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_ssld_s.name() + "\":\"" + start_ssld + "\"}");
                 } else {
                     // this should fit exactly on the old urls
-                    Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch + "\"}");
+                    String deletequery = "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch.replace("\\", "\\\\") + "\"}";
+                    Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, deletequery);
                 }
                 // we do not create a crawler document entry here because that would conflict with the double check.
                 // crawler documents must be written after the double check has happened.
