@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import javax.servlet.http.HttpServletResponse;
@@ -162,7 +161,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 // crawler documents must be written after the double check has happened.
 
                 // create a crawl queue entry
-                GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getQueues(), ShardingMethod.BALANCE, Crawler.CRAWLER_PRIORITY_DIMENSIONS, singlecrawl.getInt("priority"), url.getHost());
+                GridQueue queueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.BALANCE, Crawler.CRAWLER_PRIORITY_DIMENSIONS, singlecrawl.getInt("priority"), url.getHost());
                 SusiThought json = new SusiThought();
                 json.setData(new JSONArray().put(singlecrawl));
                 JSONObject action = new JSONObject()
