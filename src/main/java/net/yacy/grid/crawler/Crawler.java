@@ -410,7 +410,7 @@ public class Crawler {
                 Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
                 return true;
             } catch (Throwable e) {
-                Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() + "\n" + crawlaction.toString(), e);
+                Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() /*+ "\n" + crawlaction.toString()*/, e);
                 return false;
             }
         }
