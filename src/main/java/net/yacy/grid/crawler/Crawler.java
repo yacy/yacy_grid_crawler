@@ -184,17 +184,17 @@ public class Crawler {
         }
 
         @Override
-        public boolean processAction(SusiAction crawlaction, JSONArray data, String processName, int processNumber) {
+        public ActionResult processAction(SusiAction crawlaction, JSONArray data, String processName, int processNumber) {
             doDoubleCleanup();
             String crawlID = crawlaction.getStringAttr("id");
             if (crawlID == null || crawlID.length() == 0) {
                 Data.logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
-                return false;
+                return ActionResult.FAIL_IRREVERSIBLE;
             }
             JSONObject crawl = SusiThought.selectData(data, "id", crawlID);
             if (crawl == null) {
                 Data.logger.info("Crawler.processAction Fail: ID of Action not found in data: " + crawlaction.toString());
-                return false;
+                return ActionResult.FAIL_IRREVERSIBLE;
             }
 
             int depth = crawlaction.getIntAttr("depth");
@@ -204,14 +204,14 @@ public class Crawler {
             if (depth > crawlingDepth) {
                 // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
                 Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + crawlID + ", depth = " + crawlingDepth);
-                return true;
+                return ActionResult.SUCCESS;
             }
 
             // load graph
             String sourcegraph = crawlaction.getStringAttr("sourcegraph");
             if (sourcegraph == null || sourcegraph.length() == 0) {
                 Data.logger.info("Crawler.processAction Fail: sourcegraph of Action is empty: " + crawlaction.toString());
-                return false;
+                return ActionResult.FAIL_IRREVERSIBLE;
             }
             try {
                 JSONList jsonlist = null;
@@ -224,7 +224,7 @@ public class Crawler {
                     jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
                 } catch (IOException e) {
                     Data.logger.warn("Crawler.processAction could not read asset from storage: " + sourcegraph, e);
-                    return false;
+                    return ActionResult.FAIL_IRREVERSIBLE;
                 }
 
                 // declare filter from the crawl profile
@@ -408,10 +408,10 @@ public class Crawler {
                 // bulk-store the crawler documents
                 CrawlerDocument.storeBulk(Data.gridIndex, crawlerDocuments);
                 Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
-                return true;
+                return ActionResult.SUCCESS;
             } catch (Throwable e) {
                 Data.logger.info("Crawler.processAction Fail: loading of sourcegraph failed: " + e.getMessage() /*+ "\n" + crawlaction.toString()*/, e);
-                return false;
+                return ActionResult.FAIL_IRREVERSIBLE;
             }
         }
     }
