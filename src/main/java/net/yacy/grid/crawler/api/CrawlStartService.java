@@ -64,8 +64,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
     private static final long serialVersionUID = 8578474303031749879L;
     public static final String NAME = "crawlStart";
-    
-    
+
     @Override
     public String getAPIPath() {
         return "/yacy/grid/crawler/" + NAME + ".json";
@@ -74,10 +73,12 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
     @Override
     public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
         JSONObject crawlstart = CrawlerDefaultValuesService.crawlStartDefaultClone();
+
+        // read call attributes using the default crawlstart key names
         for (String key: crawlstart.keySet()) {
-                Object object = crawlstart.get(key);
-                if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
-                else if (object instanceof Integer) crawlstart.put(key, call.get(key, crawlstart.getInt(key)));
+            Object object = crawlstart.get(key);
+            if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
+            else if (object instanceof Integer) crawlstart.put(key, call.get(key, crawlstart.getInt(key)));
             else if (object instanceof Long) crawlstart.put(key, call.get(key, crawlstart.getLong(key)));
             else if (object instanceof JSONArray) {
                 JSONArray a = crawlstart.getJSONArray(key);
@@ -87,6 +88,10 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 System.out.println("unrecognized type: " + object.getClass().toString());
             }
         }
+
+        // fix attributes
+        final int crawlingDepth = crawlstart.optInt("crawlingDepth", 3);
+        crawlstart.put("crawlingDepth", Math.min(crawlingDepth, 8)); // crawlingDepth shall not exceed 8 - this is used for enhanced balancing to be able to reach crawl leaves
         final String mustmatch = crawlstart.optString("mustmatch", "").trim();
         crawlstart.put("mustmatch", mustmatch);
         final Map<String, Pattern> collections = WebMapping.collectionParser(crawlstart.optString("collection").trim());
