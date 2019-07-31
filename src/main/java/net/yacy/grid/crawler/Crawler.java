@@ -206,6 +206,7 @@ public class Crawler {
                 Data.logger.info("Crawler.processAction Leaf: reached a crawl leaf for crawl " + crawlID + ", depth = " + crawlingDepth);
                 return ActionResult.SUCCESS;
             }
+            boolean isCrawlLeaf = depth == crawlingDepth;
 
             // load graph
             String sourcegraph = crawlaction.getStringAttr("sourcegraph");
@@ -387,7 +388,7 @@ public class Crawler {
 
                         // create follow-up crawl to next depth
                         for (int pc = 0; pc < partitions.size(); pc++) {
-                            JSONObject loaderAction = newLoaderAction(priority, crawlID, partitions.get(pc), depth, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
+                            JSONObject loaderAction = newLoaderAction(priority, crawlID, partitions.get(pc), depth, isCrawlLeaf, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
                             SusiThought nextjson = new SusiThought()
                                     .setData(data)
                                     .addAction(new SusiAction(loaderAction));
@@ -450,6 +451,7 @@ public class Crawler {
             String id,
             JSONArray urls,
             int depth,
+            boolean isCrawlLeaf,
             int retry,
             long timestamp,
             int partition,
@@ -469,7 +471,7 @@ public class Crawler {
         assert doIndexing || doCrawling; // one or both must be true; doing none of that does not make sense
         // if all of the urls shall be indexed (see indexing patterns) then do indexing actions
         if (doIndexing) {
-            GridQueue indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getSourceQueues(), ShardingMethod.BALANCE, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
+            GridQueue indexerQueueName = Data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getSourceQueues(), ShardingMethod.LEAST_FILLED, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.indexer.name())
                 .put("queue", indexerQueueName.name())
@@ -479,7 +481,7 @@ public class Crawler {
         }
         // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
         if (doCrawling) {
-            GridQueue crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.BALANCE, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
+            GridQueue crawlerQueueName = Data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.LEAST_FILLED, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.crawler.name())
                 .put("queue", crawlerQueueName.name())
@@ -490,7 +492,7 @@ public class Crawler {
         }
 
         // bevor that and after loading we have a parsing action
-        GridQueue parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getSourceQueues(), ShardingMethod.BALANCE, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
+        GridQueue parserQueueName = Data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getSourceQueues(), ShardingMethod.LEAST_FILLED, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONArray parserActions = new JSONArray().put(new JSONObject(true)
                 .put("type", YaCyServices.parser.name())
                 .put("queue", parserQueueName.name())
@@ -501,7 +503,7 @@ public class Crawler {
                 .put("actions", postParserActions)); // actions after parsing
 
         // at the beginning of the process, we do a loading.
-        GridQueue loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getSourceQueues(), ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
+        GridQueue loaderQueueName = Data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getSourceQueues(), isCrawlLeaf ? ShardingMethod.LEAST_FILLED : ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
         JSONObject loaderAction = new JSONObject(true)
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())
