@@ -133,33 +133,33 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
                 // delete the start url
                 String urlid = Digest.encodeMD5Hex(start_url);
-                long deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"_id\":\"" + urlid + "\"}");
+                long deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, QueryLanguage.fields, "{ \"_id\":\"" + urlid + "\"}");
                 Data.logger.info("deleted " + deleted + " old crawl index entries for _id");
 
                 // Because 'old' crawls may block new ones we identify possible blocking entries using the mustmatch pattern.
                 // We therefore delete all entries with the same mustmatch pattern before a crawl starts.
                 if (mustmatch.equals(".*")) {
                     // we cannot delete all wide crawl status urls!
-                    JSONList old_crawls = Data.gridIndex.query(GridIndex.CRAWLSTART_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlstartMapping.start_url_s.name() + "\":\"" + start_url + "\"}", 0, 100);
+                    JSONList old_crawls = Data.gridIndex.query(GridIndex.CRAWLSTART_INDEX_NAME, QueryLanguage.fields, "{ \"" + CrawlstartMapping.start_url_s.name() + "\":\"" + start_url + "\"}", 0, 100);
                     // from there we pick out the crawl start id and delete using them
                     for (Object j: old_crawls.toArray()) {
                         String crawlid = ((JSONObject) j).optString(CrawlstartMapping.crawl_id_s.name());
                         if (crawlid.length() > 0) {
-                            deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.crawl_id_s.name() + "\":\"" + crawlid + "\"}");
+                            deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.crawl_id_s.name() + "\":\"" + crawlid + "\"}");
                             Data.logger.info("deleted " + deleted + " old crawl index entries for crawl_id_s");
                         }
                     }
                     // we also delete all entries with same start_url and start_ssld
-                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_url_s.name() + "\":\"" + start_url + "\"}");
+                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_url_s.name() + "\":\"" + start_url + "\"}");
                     Data.logger.info("deleted " + deleted + " old crawl index entries for start_url_s");
-                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_ssld_s.name() + "\":\"" + start_ssld + "\"}");
+                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_ssld_s.name() + "\":\"" + start_ssld + "\"}");
                     Data.logger.info("deleted " + deleted + " old crawl index entries for start_ssld_s");
                 } else {
                     // this should fit exactly on the old urls
                     // test url:
                     // curl -s -H 'Content-Type: application/json' -X GET http://localhost:9200/crawler/_search?q=_id:0a800a8ec1cc76b5eb8412ec494babc9 | python3 -m json.tool
                     String deletequery = "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch.replace("\\", "\\\\") + "\"}";
-                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, GridIndex.EVENT_TYPE_NAME, QueryLanguage.fields, deletequery);
+                    deleted = Data.gridIndex.delete(GridIndex.CRAWLER_INDEX_NAME, QueryLanguage.fields, deletequery);
                     Data.logger.info("deleted " + deleted + " old crawl index entries");
                 }
                 // we do not create a crawler document entry here because that would conflict with the double check.
