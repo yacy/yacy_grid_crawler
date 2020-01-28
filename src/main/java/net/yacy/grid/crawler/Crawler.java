@@ -407,7 +407,17 @@ public class Crawler {
                     }
                 }
                 // bulk-store the crawler documents
-                CrawlerDocument.storeBulk(Data.gridIndex, crawlerDocuments);
+                Map<String, CrawlerDocument> crawlerDocumentsMap = new HashMap<>();
+                crawlerDocuments.forEach(crawlerDocument -> {
+                    String url = crawlerDocument.getURL();
+                        if (url != null && url.length() > 0) {
+                            String id = Digest.encodeMD5Hex(url);
+                            crawlerDocumentsMap.put(id, crawlerDocument);
+                        } else {
+                            assert false : "url not set / storeBulk";
+                        }
+                });
+                CrawlerDocument.storeBulk(Data.gridIndex, crawlerDocumentsMap);
                 Data.logger.info("Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
                 return ActionResult.SUCCESS;
             } catch (Throwable e) {
