@@ -344,7 +344,7 @@ public class Crawler {
                 if (!nextMap.isEmpty()) {
 
                     // make a double-check
-                    Set<String> exist = Data.gridIndex.existBulk(GridIndex.CRAWLER_INDEX_NAME, nextMap.keySet());
+                    Set<String> exist = Data.gridIndex.existBulk(Data.config.get("grid.elasticsearch.indexName.crawler"), nextMap.keySet());
                     for (String u: exist) nextMap.remove(u);
                     Collection<String> nextList = nextMap.values(); // a set of urls
 
