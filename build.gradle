@@ -43,5 +43,6 @@ dependencies {
     compile group: 'jcifs', name: 'jcifs', version: '1.+'
     compile group: 'org.elasticsearch.client', name: 'transport', version: '6.8.+'
     compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '5.6.0.201912101111-r'
+    compile group: 'com.hazelcast', name: 'hazelcast', version: '4.1.+'
     compile group: 'io.netty', name: 'netty-all', version: '4.+'
 }
