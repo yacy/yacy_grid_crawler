@@ -111,7 +111,8 @@ public class Crawler {
             WebMapping.iframes_sxt.name()
     };
 
-    private final static Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
+    private final static Map<String, DoubleCache> doubles = Service.hazelcast.getMap("doubles");
+    //private final static Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
     private static long doublesLastCleanup = System.currentTimeMillis();
     private final static long doublesCleanupTimeout = 1000L * 60L * 60L * 24L * 7L; // cleanup after 7 days
     private final static long doublesCleanupPeriod = 1000L * 60L * 10L; // do cleanup each 10 minutes
@@ -596,5 +597,5 @@ public class Crawler {
         Service.runService(null);
         brokerListener.terminate();
     }
-    
+
 }
