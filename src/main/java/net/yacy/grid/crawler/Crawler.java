@@ -6,12 +6,12 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- *  
+ *
  *  This library is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU Lesser General Public License
  *  along with this program in the file lgpl21.txt
  *  If not, see <http://www.gnu.org/licenses/>.
@@ -71,7 +71,7 @@ import net.yacy.grid.tools.MultiProtocolURL;
 
 /**
  * The Crawler main class
- * 
+ *
  * performance debugging:
  * http://localhost:8300/yacy/grid/mcp/info/threaddump.txt
  * http://localhost:8300/yacy/grid/mcp/info/threaddump.txt?count=100
@@ -84,7 +84,7 @@ public class Crawler {
     public static int[] LOADER_PRIORITY_DIMENSIONS = YaCyServices.loader.getSourceQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.loader.getSourceQueues().length - 1, 1};
     public static int[] PARSER_PRIORITY_DIMENSIONS = YaCyServices.parser.getSourceQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.parser.getSourceQueues().length - 1, 1};
     public static int[] INDEXER_PRIORITY_DIMENSIONS = YaCyServices.indexer.getSourceQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.indexer.getSourceQueues().length - 1, 1};
- 
+
     public static void initPriorityQueue(int priorityDimension) {
         CRAWLER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.crawler, priorityDimension);
         LOADER_PRIORITY_DIMENSIONS = priorityDimensions(YaCyServices.loader, priorityDimension);
@@ -111,8 +111,8 @@ public class Crawler {
             WebMapping.iframes_sxt.name()
     };
 
-    private final static Map<String, DoubleCache> doubles = Service.hazelcast.getMap("doubles");
-    //private final static Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
+    //private final static Map<String, DoubleCache> doubles = Service.hazelcast.getMap("doubles");
+    private static Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
     private static long doublesLastCleanup = System.currentTimeMillis();
     private final static long doublesCleanupTimeout = 1000L * 60L * 60L * 24L * 7L; // cleanup after 7 days
     private final static long doublesCleanupPeriod = 1000L * 60L * 10L; // do cleanup each 10 minutes
@@ -154,7 +154,7 @@ public class Crawler {
 
         private final Blacklist getBlacklistCrawler(String processName, int processNumber) {
             String key = processName + "_" + processNumber;
-            Blacklist blacklist = blacklists_crawler.get(key);
+            Blacklist blacklist = this.blacklists_crawler.get(key);
             if (blacklist == null) {
                 this.blacklists_crawler.put(key, blacklist = loadBlacklist(this.blacklist_crawler_names_list));
             }
@@ -162,7 +162,7 @@ public class Crawler {
         }
         private final Blacklist getBlacklistIndexer(String processName, int processNumber) {
             String key = processName + "_" + processNumber;
-            Blacklist blacklist = blacklists_indexer.get(key);
+            Blacklist blacklist = this.blacklists_indexer.get(key);
             if (blacklist == null) {
                 this.blacklists_indexer.put(key, blacklist = loadBlacklist(this.blacklist_indexer_names_list));
             }
@@ -442,7 +442,7 @@ public class Crawler {
         return partitions;
     }
 
-    private final static String PATTERN_TIMEF = "MMddHHmmssSSS"; 
+    private final static String PATTERN_TIMEF = "MMddHHmmssSSS";
 
     /**
      * Create a new loader action. This action contains all follow-up actions after
@@ -577,6 +577,7 @@ public class Crawler {
         services.addAll(Arrays.asList(MCP.MCP_SERVICES));
         services.addAll(Arrays.asList(CRAWLER_SERVICES));
         Service.initEnvironment(CRAWLER_SERVICE, services, DATA_PATH, false);
+        doubles = Service.hazelcast.getMap("doubles");
 
         // read global blacklists
         String[] grid_crawler_blacklist = Data.config.get("grid.crawler.blacklist").split(",");
