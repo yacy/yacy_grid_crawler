@@ -6,12 +6,12 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- *  
+ *
  *  This library is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU Lesser General Public License
  *  along with this program in the file lgpl21.txt
  *  If not, see <http://www.gnu.org/licenses/>.
@@ -48,13 +48,14 @@ import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
+import net.yacy.grid.mcp.Logger;
 import net.yacy.grid.tools.Digest;
 import net.yacy.grid.tools.Domains;
 import net.yacy.grid.tools.JSONList;
 import net.yacy.grid.tools.MultiProtocolURL;
 
 /**
- * 
+ *
  * Test URL:
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net&indexmustnotmatch=.*Mitmachen.*&mustmatch=.*yacy.net.*
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=ix.de&crawlingDepth=6&priority=true
@@ -111,7 +112,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             singlecrawl.put("id", crawl_id);
             singlecrawl.put("start_url", start_url);
             singlecrawl.put("start_ssld", start_ssld);
-            
+
             //singlecrawl.put("crawlingURLs", new JSONArray().put(url.toNormalform(true)));
 
             try {
@@ -136,7 +137,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 String crawlerIndexName = Data.config.getOrDefault("grid.elasticsearch.indexName.crawler", GridIndex.DEFAULT_INDEXNAME_CRAWLER);
                 String crawlstartIndexName = Data.config.getOrDefault("grid.elasticsearch.indexName.crawlstart", GridIndex.DEFAULT_INDEXNAME_CRAWLSTART);
                 long deleted = Data.gridIndex.delete(crawlerIndexName, QueryLanguage.fields, "{ \"_id\":\"" + urlid + "\"}");
-                Data.logger.info("deleted " + deleted + " old crawl index entries for _id");
+                Logger.info(this.getClass(), "deleted " + deleted + " old crawl index entries for _id");
 
                 // Because 'old' crawls may block new ones we identify possible blocking entries using the mustmatch pattern.
                 // We therefore delete all entries with the same mustmatch pattern before a crawl starts.
@@ -148,21 +149,21 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                         String crawlid = ((JSONObject) j).optString(CrawlstartMapping.crawl_id_s.name());
                         if (crawlid.length() > 0) {
                             deleted = Data.gridIndex.delete(crawlerIndexName, QueryLanguage.fields, "{ \"" + CrawlerMapping.crawl_id_s.name() + "\":\"" + crawlid + "\"}");
-                            Data.logger.info("deleted " + deleted + " old crawl index entries for crawl_id_s");
+                            Logger.info(this.getClass(), "deleted " + deleted + " old crawl index entries for crawl_id_s");
                         }
                     }
                     // we also delete all entries with same start_url and start_ssld
                     deleted = Data.gridIndex.delete(crawlerIndexName, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_url_s.name() + "\":\"" + start_url + "\"}");
-                    Data.logger.info("deleted " + deleted + " old crawl index entries for start_url_s");
+                    Logger.info(this.getClass(), "deleted " + deleted + " old crawl index entries for start_url_s");
                     deleted = Data.gridIndex.delete(crawlerIndexName, QueryLanguage.fields, "{ \"" + CrawlerMapping.start_ssld_s.name() + "\":\"" + start_ssld + "\"}");
-                    Data.logger.info("deleted " + deleted + " old crawl index entries for start_ssld_s");
+                    Logger.info(this.getClass(), "deleted " + deleted + " old crawl index entries for start_ssld_s");
                 } else {
                     // this should fit exactly on the old urls
                     // test url:
                     // curl -s -H 'Content-Type: application/json' -X GET http://localhost:9200/crawler/_search?q=_id:0a800a8ec1cc76b5eb8412ec494babc9 | python3 -m json.tool
                     String deletequery = "{ \"" + CrawlerMapping.mustmatch_s.name() + "\":\"" + mustmatch.replace("\\", "\\\\") + "\"}";
                     deleted = Data.gridIndex.delete(crawlerIndexName, QueryLanguage.fields, deletequery);
-                    Data.logger.info("deleted " + deleted + " old crawl index entries");
+                    Logger.info(this.getClass(), "deleted " + deleted + " old crawl index entries");
                 }
                 // we do not create a crawler document entry here because that would conflict with the double check.
                 // crawler documents must be written after the double check has happened.
@@ -186,7 +187,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 Data.gridBroker.send(YaCyServices.crawler, queueName, b);
 
             } catch (IOException e) {
-                Data.logger.warn("error when starting crawl for " + url.toNormalform(true), e);
+                Logger.warn(this.getClass(), "error when starting crawl for " + url.toNormalform(true), e);
                 allCrawlstarts.put(ObjectAPIHandler.COMMENT_KEY, e.getMessage());
             }
         }

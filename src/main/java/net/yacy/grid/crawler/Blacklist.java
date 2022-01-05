@@ -6,12 +6,12 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- *  
+ *
  *  This library is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU Lesser General Public License
  *  along with this program in the file lgpl21.txt
  *  If not, see <http://www.gnu.org/licenses/>.
@@ -31,7 +31,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import net.yacy.grid.mcp.Data;
+import net.yacy.grid.mcp.Logger;
 import net.yacy.grid.tools.ARC;
 import net.yacy.grid.tools.HashARC;
 import net.yacy.grid.tools.MultiProtocolURL;
@@ -53,7 +53,7 @@ public class Blacklist {
         this.blacklistHitCache = new HashARC<>(100000);
         this.blacklistMissCache = new HashARC<>(100000);
     }
-    
+
     public void load(File f) throws IOException {
         final AtomicInteger counter = new AtomicInteger(0);
         Files.lines(f.toPath(), StandardCharsets.UTF_8).forEach(line -> {
@@ -73,7 +73,7 @@ public class Blacklist {
                         this.blacklist.add(bi);
                         counter.incrementAndGet();
                     } catch (PatternSyntaxException e) {
-                        Data.logger.warn("regex for host in file " + f.getName() + " cannot be compiled: " + line.substring(5).trim());
+                        Logger.warn(this.getClass(), "regex for host in file " + f.getName() + " cannot be compiled: " + line.substring(5).trim());
                     }
                 } else {
                     try {
@@ -81,14 +81,14 @@ public class Blacklist {
                         this.blacklist.add(bi);
                         counter.incrementAndGet();
                     } catch (PatternSyntaxException e) {
-                        Data.logger.warn("regex for url in file " + f.getName() + " cannot be compiled: " + line);
+                        Logger.warn(this.getClass(), "regex for url in file " + f.getName() + " cannot be compiled: " + line);
                     }
                 }
             }
         });
-        Data.logger.info("loaded " + counter.get() + " blacklist entries from file " + f.getName());
+        Logger.info(this.getClass(), "loaded " + counter.get() + " blacklist entries from file " + f.getName());
     }
-    
+
     public final static class BlacklistInfo {
         public final Matcher matcher;
         public final String source;
@@ -101,11 +101,11 @@ public class Blacklist {
             this.host = host;
         }
     }
-    
+
     public BlacklistInfo isBlacklisted(String url, MultiProtocolURL u) {
-        BlacklistInfo cachedBI = blacklistHitCache.get(url);
+        BlacklistInfo cachedBI = this.blacklistHitCache.get(url);
         if (cachedBI != null) return cachedBI;
-        Boolean cachedMiss = blacklistMissCache.get(url);
+        Boolean cachedMiss = this.blacklistMissCache.get(url);
         if (cachedMiss != null) return null;
         for (BlacklistInfo bi: this.blacklist) {
             if (u != null && bi.host != null) {
@@ -116,13 +116,13 @@ public class Blacklist {
                 bi.matcher.reset(url);
                 //Thread.currentThread().setName(bi.matcher.pattern().pattern() + " -> " + url);
                 if (bi.matcher.matches()) {
-                    blacklistHitCache.put(url, bi);
+                    this.blacklistHitCache.put(url, bi);
                     return bi;
                 }
             }
         }
-        blacklistMissCache.put(url, Boolean.TRUE);
+        this.blacklistMissCache.put(url, Boolean.TRUE);
         return null;
     }
-    
+
 }
