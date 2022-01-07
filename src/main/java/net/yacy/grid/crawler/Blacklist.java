@@ -31,9 +31,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import net.yacy.grid.mcp.Logger;
 import net.yacy.grid.tools.ARC;
 import net.yacy.grid.tools.HashARC;
+import net.yacy.grid.tools.Logger;
 import net.yacy.grid.tools.MultiProtocolURL;
 
 /**

@@ -48,10 +48,10 @@ import net.yacy.grid.io.index.WebMapping;
 import net.yacy.grid.io.messages.GridQueue;
 import net.yacy.grid.io.messages.ShardingMethod;
 import net.yacy.grid.mcp.Data;
-import net.yacy.grid.mcp.Logger;
 import net.yacy.grid.tools.Digest;
 import net.yacy.grid.tools.Domains;
 import net.yacy.grid.tools.JSONList;
+import net.yacy.grid.tools.Logger;
 import net.yacy.grid.tools.MultiProtocolURL;
 
 /**
