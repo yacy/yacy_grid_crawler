@@ -22,6 +22,7 @@ package net.yacy.grid.crawler;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -117,7 +118,8 @@ public class Crawler {
     private static long doublesLastCleanup = System.currentTimeMillis();
     private final static long doublesCleanupTimeout = 1000L * 60L * 60L * 24L * 7L; // cleanup after 7 days
     private final static long doublesCleanupPeriod = 1000L * 60L * 10L; // do cleanup each 10 minutes
-    private static class DoubleCache {
+    private static class DoubleCache implements Serializable {
+        private static final long serialVersionUID = 614262945713636851L;
         public Set<String> doubleHashes;
         public long time;
         public DoubleCache() {
