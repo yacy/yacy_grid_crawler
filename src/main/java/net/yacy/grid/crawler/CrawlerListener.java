@@ -176,7 +176,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     private final Blacklist loadBlacklist(final String[] names) {
         final Blacklist blacklist = new Blacklist();
         for (final String name: names) {
-            File f = new File(super.data.gridServicePath, "conf/" + name.trim());
+            File f = new File(super.config.gridServicePath, "conf/" + name.trim());
             if (!f.exists()) f = new File("conf/" + name.trim());
             if (!f.exists()) continue;
             try {
@@ -225,7 +225,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 jsonlist = crawlaction.getJSONListAsset(sourcegraph);
             }
             if (jsonlist == null) try {
-                final Asset<byte[]> graphasset = super.data.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
+                final Asset<byte[]> graphasset = super.config.gridStorage.load(sourcegraph); // this must be a list of json, containing document links
                 final byte[] graphassetbytes = graphasset.getPayload();
                 jsonlist = new JSONList(new ByteArrayInputStream(graphassetbytes));
             } catch (final IOException e) {
@@ -349,8 +349,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             if (!nextMap.isEmpty()) {
 
                 // make a double-check
-                final String crawlerIndexName = super.data.properties.getOrDefault("grid.elasticsearch.indexName.crawler", GridIndex.DEFAULT_INDEXNAME_CRAWLER);
-                final Set<String> exist = super.data.gridIndex.existBulk(crawlerIndexName, nextMap.keySet());
+                final String crawlerIndexName = super.config.properties.getOrDefault("grid.elasticsearch.indexName.crawler", GridIndex.DEFAULT_INDEXNAME_CRAWLER);
+                final Set<String> exist = super.config.gridIndex.existBulk(crawlerIndexName, nextMap.keySet());
                 for (final String u: exist) nextMap.remove(u);
                 final Collection<String> nextList = nextMap.values(); // a set of urls
 
@@ -406,7 +406,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         try {
                             final Services serviceName = YaCyServices.valueOf(loaderAction.getString("type"));
                             final GridQueue queueName = new GridQueue(loaderAction.getString("queue"));
-                            super.data.gridBroker.send(serviceName, queueName, b);
+                            super.config.gridBroker.send(serviceName, queueName, b);
                         } catch (final IOException e) {
                             Logger.warn(this.getClass(), "error when starting crawl with message " + message, e);
                         }
@@ -424,7 +424,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         assert false : "url not set / storeBulk";
                     }
             });
-            CrawlerDocument.storeBulk(super.data, super.data.gridIndex, crawlerDocumentsMap);
+            CrawlerDocument.storeBulk(super.config, super.config.gridIndex, crawlerDocumentsMap);
             Logger.info(this.getClass(), "Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
             return ActionResult.SUCCESS;
         } catch (final Throwable e) {
@@ -485,7 +485,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         assert doIndexing || doCrawling; // one or both must be true; doing none of that does not make sense
         // if all of the urls shall be indexed (see indexing patterns) then do indexing actions
         if (doIndexing) {
-            final GridQueue indexerQueueName = super.data.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getSourceQueues(), ShardingMethod.LEAST_FILLED, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
+            final GridQueue indexerQueueName = super.config.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getSourceQueues(), ShardingMethod.LEAST_FILLED, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.indexer.name())
                 .put("queue", indexerQueueName.name())
@@ -495,7 +495,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         }
         // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
         if (doCrawling) {
-            final GridQueue crawlerQueueName = super.data.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.LEAST_FILLED, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
+            final GridQueue crawlerQueueName = super.config.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.LEAST_FILLED, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
                 .put("type", YaCyServices.crawler.name())
                 .put("queue", crawlerQueueName.name())
@@ -506,7 +506,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         }
 
         // bevor that and after loading we have a parsing action
-        final GridQueue parserQueueName = super.data.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getSourceQueues(), ShardingMethod.LEAST_FILLED, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
+        final GridQueue parserQueueName = super.config.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getSourceQueues(), ShardingMethod.LEAST_FILLED, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
         final JSONArray parserActions = new JSONArray().put(new JSONObject(true)
                 .put("type", YaCyServices.parser.name())
                 .put("queue", parserQueueName.name())
@@ -517,7 +517,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("actions", postParserActions)); // actions after parsing
 
         // at the beginning of the process, we do a loading.
-        final GridQueue loaderQueueName = super.data.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getSourceQueues(), isCrawlLeaf ? ShardingMethod.LEAST_FILLED : ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
+        final GridQueue loaderQueueName = super.config.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getSourceQueues(), isCrawlLeaf ? ShardingMethod.LEAST_FILLED : ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
         final JSONObject loaderAction = new JSONObject(true)
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())

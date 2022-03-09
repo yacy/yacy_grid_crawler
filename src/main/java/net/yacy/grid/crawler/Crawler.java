@@ -79,6 +79,9 @@ public class Crawler {
             // initialize REST server with services
             this.service = new Service(this.config);
 
+            // connect backend
+            this.config.connectBackend();
+
             // initiate broker application: listening to indexing requests at RabbitMQ
             this.brokerApplication = new CrawlerListener(this.config, CRAWLER_SERVICE);
 
