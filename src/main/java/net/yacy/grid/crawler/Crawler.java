@@ -101,7 +101,7 @@ public class Crawler {
 
         @Override
         public void stop() {
-            Logger.info("Stopping MCP Application...");
+            Logger.info("Stopping Crawler Application...");
             this.serviceApplication.stop();
             this.brokerApplication.stop();
             this.service.stop();
