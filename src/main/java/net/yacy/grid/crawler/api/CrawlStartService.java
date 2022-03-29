@@ -95,7 +95,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         // fix attributes
         final int crawlingDepth = crawlstart.optInt("crawlingDepth", 3);
         crawlstart.put("crawlingDepth", Math.min(crawlingDepth, 8)); // crawlingDepth shall not exceed 8 - this is used for enhanced balancing to be able to reach crawl leaves
-        final String mustmatch = crawlstart.optString("mustmatch", "").trim();
+        final String mustmatch = crawlstart.optString("mustmatch", CrawlerDefaultValuesService.defaultValues.getString("mustmatch")).trim();
         crawlstart.put("mustmatch", mustmatch);
         final Map<String, Pattern> collections = WebMapping.collectionParser(crawlstart.optString("collection").trim());
 
