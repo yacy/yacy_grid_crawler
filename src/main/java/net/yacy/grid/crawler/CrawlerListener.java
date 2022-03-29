@@ -23,6 +23,8 @@ import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.hazelcast.core.HazelcastException;
+
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.Services;
@@ -105,14 +107,19 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             }
         }
         if (this.config.hazelcast != null) {
-            final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
-            i = hazeldoubles.entrySet().iterator();
-            while (i.hasNext()) {
-                final Map.Entry<String, DoubleCache> cache = i.next();
-                if ((now - cache.getValue().time) > doublesCleanupTimeout) {
-                    cache.getValue().doubleHashes.clear();
-                    i.remove();
+            try {
+                final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
+                i = hazeldoubles.entrySet().iterator();
+                while (i.hasNext()) {
+                    final Map.Entry<String, DoubleCache> cache = i.next();
+                    if ((now - cache.getValue().time) > doublesCleanupTimeout) {
+                        cache.getValue().doubleHashes.clear();
+                        i.remove();
+                    }
                 }
+            } catch (final HazelcastException e) {
+                Logger.error(e);
+                this.config.hazelcast = null; // <VADER>DON'T FAIL ME AGAIN!</VADER>
             }
         }
     }
@@ -300,9 +307,16 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
                     doublecache = this.doubles.get(crawlID);
                 } else {
-                    final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
-                    if (!hazeldoubles.containsKey(crawlID)) hazeldoubles.put(crawlID, new DoubleCache());
-                    doublecache = hazeldoubles.get(crawlID);
+                    try {
+                        final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
+                        if (!hazeldoubles.containsKey(crawlID)) hazeldoubles.put(crawlID, new DoubleCache());
+                        doublecache = hazeldoubles.get(crawlID);
+                    } catch (final HazelcastException e) {
+                        Logger.error(e);
+                        this.config.hazelcast = null; // <VADER>DON'T FAIL ME AGAIN!</VADER>
+                        if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
+                        doublecache = this.doubles.get(crawlID);
+                    }
                 }
                 Logger.info(this.getClass(), "Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
                 urlcheck: for (final MultiProtocolURL url: graph) {
