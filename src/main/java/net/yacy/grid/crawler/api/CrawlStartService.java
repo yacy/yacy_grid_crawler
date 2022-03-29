@@ -59,6 +59,9 @@ import net.yacy.grid.tools.MultiProtocolURL;
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=yacy.net&indexmustnotmatch=.*Mitmachen.*&mustmatch=.*yacy.net.*
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=ix.de&crawlingDepth=6&priority=true
  * http://localhost:8300/yacy/grid/crawler/crawlStart.json?crawlingURL=tagesschau.de&loaderHeadless=false
+ *
+ * then check crawl queue status at http://localhost:15672/
+ * default account is guest:guest
  */
 public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
 
