@@ -78,7 +78,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     private final Map<String, Blacklist> blacklists_crawler, blacklists_indexer;
 
     //private final static Map<String, DoubleCache> doubles = Service.hazelcast.getMap("doubles");
-    private Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
+    private final Map<String, DoubleCache> doubles = new ConcurrentHashMap<>();
     private static long doublesLastCleanup = System.currentTimeMillis();
     private final static long doublesCleanupTimeout = 1000L * 60L * 60L * 24L * 7L; // cleanup after 7 days
     private final static long doublesCleanupPeriod = 1000L * 60L * 10L; // do cleanup each 10 minutes
@@ -96,12 +96,23 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         final long now = System.currentTimeMillis();
         if (now - doublesLastCleanup < doublesCleanupPeriod) return;
         doublesLastCleanup = now;
-        final Iterator<Map.Entry<String, DoubleCache>> i = this.doubles.entrySet().iterator();
+        Iterator<Map.Entry<String, DoubleCache>> i = this.doubles.entrySet().iterator();
         while (i.hasNext()) {
             final Map.Entry<String, DoubleCache> cache = i.next();
             if ((now - cache.getValue().time) > doublesCleanupTimeout) {
                 cache.getValue().doubleHashes.clear();
                 i.remove();
+            }
+        }
+        if (this.config.hazelcast != null) {
+            final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
+            i = hazeldoubles.entrySet().iterator();
+            while (i.hasNext()) {
+                final Map.Entry<String, DoubleCache> cache = i.next();
+                if ((now - cache.getValue().time) > doublesCleanupTimeout) {
+                    cache.getValue().doubleHashes.clear();
+                    i.remove();
+                }
             }
         }
     }
@@ -152,7 +163,6 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         this.blacklist_indexer_names_list = config.properties.get("grid.indexer.blacklist").split(",");
         this.blacklists_crawler = new ConcurrentHashMap<>();
         this.blacklists_indexer = new ConcurrentHashMap<>();
-        this.doubles = config.hazelcast.getMap("doubles");
     }
 
     private final Blacklist getBlacklistCrawler(final String processName, final int processNumber) {
@@ -285,8 +295,15 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 }
 
                 // sort out doubles and apply filters
-                if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
-                final DoubleCache doublecache = this.doubles.get(crawlID);
+                DoubleCache doublecache = null;
+                if (this.config.hazelcast == null) {
+                    if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
+                    doublecache = this.doubles.get(crawlID);
+                } else {
+                    final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
+                    if (!hazeldoubles.containsKey(crawlID)) hazeldoubles.put(crawlID, new DoubleCache());
+                    doublecache = hazeldoubles.get(crawlID);
+                }
                 Logger.info(this.getClass(), "Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
                 urlcheck: for (final MultiProtocolURL url: graph) {
                     // prepare status document
