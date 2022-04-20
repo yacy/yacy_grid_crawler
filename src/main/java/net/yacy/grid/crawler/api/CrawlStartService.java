@@ -33,6 +33,7 @@ import org.json.JSONObject;
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.YaCyServices;
+import net.yacy.grid.contracts.User;
 import net.yacy.grid.crawler.CrawlerListener;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
@@ -109,6 +110,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
             final JSONObject singlecrawl = new JSONObject();
             for (final String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
             final String crawl_id = CrawlerListener.getCrawlID(url, now, count++);
+            final String user_id = User.ANONYMOUS_ID;
             final String start_url = url.toNormalform(true);
             final String start_ssld = Domains.getSmartSLD(url.getHost());
             singlecrawl.put("id", crawl_id);
@@ -122,6 +124,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 // once such an entry is created, it is never changed or deleted again by any YaCy Grid process.
                 final CrawlstartDocument crawlstartDoc = new CrawlstartDocument()
                         .setCrawlID(crawl_id)
+                        .setUserID(user_id)
                         .setMustmatch(mustmatch)
                         .setCollections(collections.keySet())
                         .setCrawlstartURL(start_url)
@@ -178,6 +181,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                         .put("type", YaCyServices.crawler.name())
                         .put("queue", queueName.name())
                         .put("id", crawl_id)
+                        .put("user_id", user_id)
                         .put("depth", 0)
                         .put("sourcegraph", "rootasset");
                 final SusiAction crawlAction = new SusiAction(action);
