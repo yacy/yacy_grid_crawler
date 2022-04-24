@@ -29,6 +29,7 @@ import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.Services;
 import net.yacy.grid.YaCyServices;
+import net.yacy.grid.contracts.User;
 import net.yacy.grid.io.assets.Asset;
 import net.yacy.grid.io.index.CrawlerDocument;
 import net.yacy.grid.io.index.CrawlerDocument.Status;
@@ -209,6 +210,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     public ActionResult processAction(final SusiAction crawlaction, final JSONArray data, final String processName, final int processNumber) {
         doDoubleCleanup();
         final String crawlID = crawlaction.getStringAttr("id");
+        String userId = crawlaction.getStringAttr("userId"); if (userId == null || userId.length() == 0) userId = User.ANONYMOUS_ID;
         if (crawlID == null || crawlID.length() == 0) {
             Logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
             return ActionResult.FAIL_IRREVERSIBLE;
@@ -337,6 +339,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         // create new crawl status document
                         final CrawlerDocument crawlStatus = new CrawlerDocument()
                                 .setCrawlID(crawlID)
+                                .setUserlID(userId)
                                 .setMustmatch(mustmatchs)
                                 .setCollections(collections.keySet())
                                 .setCrawlstartURL(start_url)
@@ -374,7 +377,6 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         nextMap.put(urlid, u);
                     }
                 };
-                Logger.info(this.getClass(), "Crawler.processAction processed sub-graph " + ((line + 1)/2)  + "/" + jsonlist.length()/2 + " for url " + sourceurl);
             }
 
             if (!nextMap.isEmpty()) {
