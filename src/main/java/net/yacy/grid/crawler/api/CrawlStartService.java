@@ -79,6 +79,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         final JSONObject crawlstart = CrawlerDefaultValuesService.crawlStartDefaultClone();
 
         // read call attributes using the default crawlstart key names
+        final String userId = call.get("userId", User.ANONYMOUS_ID);
         for (final String key: crawlstart.keySet()) {
             final Object object = crawlstart.get(key);
             if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
@@ -92,6 +93,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 System.out.println("unrecognized type: " + object.getClass().toString());
             }
         }
+        crawlstart.put("userId", userId);
 
         // fix attributes
         final int crawlingDepth = crawlstart.optInt("crawlingDepth", 3);
@@ -109,11 +111,10 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         for (final MultiProtocolURL url: crawlstartURLs.getURLs()) {
             final JSONObject singlecrawl = new JSONObject();
             for (final String key: crawlstart.keySet()) singlecrawl.put(key, crawlstart.get(key)); // create a clone of crawlstart
-            final String crawl_id = CrawlerListener.getCrawlID(url, now, count++);
-            final String user_id = User.ANONYMOUS_ID;
+            final String crawlId = CrawlerListener.getCrawlID(url, now, count++);
             final String start_url = url.toNormalform(true);
             final String start_ssld = Domains.getSmartSLD(url.getHost());
-            singlecrawl.put("id", crawl_id);
+            singlecrawl.put("id", crawlId);
             singlecrawl.put("start_url", start_url);
             singlecrawl.put("start_ssld", start_ssld);
 
@@ -123,8 +124,8 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 // Create a crawlstart index entry: this will keep track of all crawls that have been started.
                 // once such an entry is created, it is never changed or deleted again by any YaCy Grid process.
                 final CrawlstartDocument crawlstartDoc = new CrawlstartDocument()
-                        .setCrawlID(crawl_id)
-                        .setUserID(user_id)
+                        .setCrawlID(crawlId)
+                        .setUserID(userId)
                         .setMustmatch(mustmatch)
                         .setCollections(collections.keySet())
                         .setCrawlstartURL(start_url)
@@ -180,8 +181,8 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 final JSONObject action = new JSONObject()
                         .put("type", YaCyServices.crawler.name())
                         .put("queue", queueName.name())
-                        .put("id", crawl_id)
-                        .put("user_id", user_id)
+                        .put("id", crawlId)
+                        .put("user_id", userId)
                         .put("depth", 0)
                         .put("sourcegraph", "rootasset");
                 final SusiAction crawlAction = new SusiAction(action);
