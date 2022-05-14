@@ -411,6 +411,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     for (final String u: indexNoIndex[ini]) {
                         final CrawlerDocument crawlStatus = new CrawlerDocument()
                             .setCrawlID(crawlID)
+                            .setUserlID(userId)
                             .setMustmatch(mustmatchs)
                             .setCollections(collections.keySet())
                             .setCrawlstartURL(start_url)
@@ -428,7 +429,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
 
                     // create follow-up crawl to next depth
                     for (int pc = 0; pc < partitions.size(); pc++) {
-                        final JSONObject loaderAction = newLoaderAction(priority, crawlID, partitions.get(pc), depth, isCrawlLeaf, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
+                        final JSONObject loaderAction = newLoaderAction(priority, crawlID, userId, partitions.get(pc), depth, isCrawlLeaf, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
                         final SusiThought nextjson = new SusiThought()
                                 .setData(data)
                                 .addAction(new SusiAction(loaderAction));
@@ -496,6 +497,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     private JSONObject newLoaderAction(
             final int priority,
             final String id,
+            final String userId,
             final JSONArray urls,
             final int depth,
             final boolean isCrawlLeaf,
@@ -538,7 +540,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
              );
         }
 
-        // bevor that and after loading we have a parsing action
+        // before that and after loading we have a parsing action
         final GridQueue parserQueueName = super.config.gridBroker.queueName(YaCyServices.parser, YaCyServices.parser.getSourceQueues(), ShardingMethod.LEAST_FILLED, PARSER_PRIORITY_DIMENSIONS, priority, hashKey);
         final JSONArray parserActions = new JSONArray().put(new JSONObject(true)
                 .put("type", YaCyServices.parser.name())
