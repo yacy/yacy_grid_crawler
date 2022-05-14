@@ -6,12 +6,12 @@
  *  modify it under the terms of the GNU Lesser General Public
  *  License as published by the Free Software Foundation; either
  *  version 2.1 of the License, or (at your option) any later version.
- *  
+ *
  *  This library is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
- *  
+ *
  *  You should have received a copy of the GNU Lesser General Public License
  *  along with this program in the file lgpl21.txt
  *  If not, see <http://www.gnu.org/licenses/>.
@@ -23,16 +23,17 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.json.JSONObject;
 
+import net.yacy.grid.contracts.User;
 import net.yacy.grid.http.APIHandler;
 import net.yacy.grid.http.ObjectAPIHandler;
 import net.yacy.grid.http.Query;
 import net.yacy.grid.http.ServiceResponse;
 
 /**
- * 
+ *
  * Test URL:
  * http://localhost:8300/yacy/grid/crawler/defaultValues.json
- * 
+ *
  * Test command:
  * curl http://localhost:8300/yacy/grid/crawler/defaultValues.json
  */
@@ -40,7 +41,7 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
 
     private static final long serialVersionUID = 8578474303031749879L;
     public static final String NAME = "defaultValues";
-    
+
     public static JSONObject defaultValues = new JSONObject(true);
     static {
         defaultValues.put("crawlingMode", "url");
@@ -70,21 +71,23 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         defaultValues.put("agentName", "");
         defaultValues.put("priority", 0);
         defaultValues.put("loaderHeadless", "true");
+        defaultValues.put("userId", User.ANONYMOUS_ID);
+        defaultValues.put("storeAssets", "false");
     }
-    
+
     @Override
     public String getAPIPath() {
         return "/yacy/grid/crawler/" + NAME + ".json";
     }
 
     public static JSONObject crawlStartDefaultClone() {
-    	JSONObject json = new JSONObject(true);
+    	final JSONObject json = new JSONObject(true);
     	defaultValues.keySet().forEach(key -> json.put(key, defaultValues.get(key)));
         return json;
     }
-    
+
     @Override
-    public ServiceResponse serviceImpl(Query call, HttpServletResponse response) {
+    public ServiceResponse serviceImpl(final Query call, final HttpServletResponse response) {
         return new ServiceResponse(defaultValues);
     }
 

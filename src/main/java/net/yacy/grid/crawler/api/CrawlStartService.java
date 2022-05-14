@@ -79,7 +79,6 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
         final JSONObject crawlstart = CrawlerDefaultValuesService.crawlStartDefaultClone();
 
         // read call attributes using the default crawlstart key names
-        final String userId = call.get("userId", User.ANONYMOUS_ID);
         for (final String key: crawlstart.keySet()) {
             final Object object = crawlstart.get(key);
             if (object instanceof String) crawlstart.put(key, call.get(key, crawlstart.getString(key)));
@@ -93,7 +92,7 @@ public class CrawlStartService extends ObjectAPIHandler implements APIHandler {
                 System.out.println("unrecognized type: " + object.getClass().toString());
             }
         }
-        crawlstart.put("userId", userId);
+        final String userId = crawlstart.optString("userId", User.ANONYMOUS_ID);
 
         // fix attributes
         final int crawlingDepth = crawlstart.optInt("crawlingDepth", 3);
