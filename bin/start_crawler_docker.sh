@@ -41,4 +41,4 @@ else
 	 --name ${containername} ${imagename}
   echo "Crawler started."
 fi
-echo "To get the app status, open http://${callhost}:8300/yacy/grid/crawler/info/status.json"
+echo "To get the app status, open http://${callhost}:8300/yacy/grid/mcp/info/status.json"
