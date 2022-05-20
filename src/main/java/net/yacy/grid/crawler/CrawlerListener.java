@@ -221,6 +221,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             return ActionResult.FAIL_IRREVERSIBLE;
         }
 
+        final boolean archiveWARC = crawl.optBoolean("archiveWARC");
+        final boolean archiveIndex = crawl.optBoolean("archiveIndex");
+        final boolean archiveGraph = crawl.optBoolean("archiveGraph");
+
         final int depth = crawlaction.getIntAttr("depth");
         final int crawlingDepth = crawl.getInt("crawlingDepth");
         final int priority =  crawl.has("priority") ? crawl.getInt("priority") : 0;
@@ -429,7 +433,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
 
                     // create follow-up crawl to next depth
                     for (int pc = 0; pc < partitions.size(); pc++) {
-                        final JSONObject loaderAction = newLoaderAction(priority, crawlID, userId, partitions.get(pc), depth, isCrawlLeaf, 0, timestamp + ini, pc, depth < crawlingDepth, ini == 0); // action includes whole hierarchy of follow-up actions
+                        final JSONObject loaderAction = newLoaderAction(
+                        		priority, crawlID, userId, partitions.get(pc), depth, isCrawlLeaf,
+                        		0, timestamp + ini, pc, depth < crawlingDepth, ini == 0,
+                        		archiveWARC, archiveIndex, archiveGraph); // action includes whole hierarchy of follow-up actions
                         final SusiThought nextjson = new SusiThought()
                                 .setData(data)
                                 .addAction(new SusiAction(loaderAction));
@@ -505,13 +512,17 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             final long timestamp,
             final int partition,
             final boolean doCrawling,
-            final boolean doIndexing) throws IOException {
+            final boolean doIndexing,
+            final boolean archiveWARC,
+            final boolean archiveIndex,
+            final boolean archiveGraph) throws IOException {
         // create file names for the assets: this uses depth and partition information
         final SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US); // we must create this here to prevent concurrency bugs which are there in the date formatter :((
-        final String namestub = id + "/d" + intf(depth) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition);
-        final String warcasset =  namestub + ".warc.gz";
-        final String webasset =  namestub + ".web.jsonlist";
-        final String graphasset =  namestub + ".graph.jsonlist";
+        final String basepath  = "/data/aaaaa/accounting/" + userId + "/";
+        final String docname  = "d" + intf(depth) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition);
+        final String warcasset  =  basepath + "warc/"  + id + "/" + docname + ".warc.gz";
+        final String indexasset =  basepath + "index/" + id + "/" + docname + ".index.jsonlist";
+        final String graphasset =  basepath + "graph/" + id + "/" + docname + ".graph.jsonlist";
         final String hashKey = new MultiProtocolURL(urls.getString(0)).getHost();
 
         // create actions to be done in reverse order:
@@ -525,7 +536,9 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("type", YaCyServices.indexer.name())
                 .put("queue", indexerQueueName.name())
                 .put("id", id)
-                .put("sourceasset", webasset)
+                .put("userId", userId)
+                .put("sourceasset", indexasset)
+                .put("archiveindex", archiveIndex)
              );
         }
         // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
@@ -535,8 +548,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("type", YaCyServices.crawler.name())
                 .put("queue", crawlerQueueName.name())
                 .put("id", id)
+                .put("userId", userId)
                 .put("depth", depth + 1)
                 .put("sourcegraph", graphasset)
+                .put("archivegraph", archiveGraph)
              );
         }
 
@@ -547,8 +562,11 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("queue", parserQueueName.name())
                 .put("id", id)
                 .put("sourceasset", warcasset)
-                .put("targetasset", webasset)
+                .put("targetasset", indexasset)
                 .put("targetgraph", graphasset)
+                .put("archivewarc", archiveWARC)
+                .put("archiveindex", archiveIndex)
+                .put("archivegraph", archiveGraph)
                 .put("actions", postParserActions)); // actions after parsing
 
         // at the beginning of the process, we do a loading.
@@ -557,8 +575,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())
             .put("id", id)
+            .put("userId", userId)
             .put("urls", urls)
             .put("targetasset", warcasset)
+            .put("archivewarc", archiveWARC)
             .put("actions", parserActions); // actions after loading
         return loaderAction;
     }

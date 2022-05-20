@@ -67,12 +67,15 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         defaultValues.put("crawlingDomMaxPages", 1000);
         defaultValues.put("crawlingQ", "off");
         defaultValues.put("cachePolicy", "if fresh");
-        defaultValues.put("collection", "user");
+        defaultValues.put("collection", "user"); // corpus name
         defaultValues.put("agentName", "");
         defaultValues.put("priority", 0);
         defaultValues.put("loaderHeadless", "true");
         defaultValues.put("userId", User.ANONYMOUS_ID);
         defaultValues.put("storeAssets", "false");
+        defaultValues.put("archiveWARC", "false");
+        defaultValues.put("archiveIndex", "false");
+        defaultValues.put("archiveGraph", "false");
     }
 
     @Override
