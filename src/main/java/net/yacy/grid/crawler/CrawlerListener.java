@@ -59,7 +59,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             WebMapping.iframes_sxt.name()
     };
 
-    private final static String PATTERN_TIMEF = "MMddHHmmssSSS";
+    private final static String PATTERN_TIMEF = "YYYYMMddHHmmssSSS";
 
     public static int[] CRAWLER_PRIORITY_DIMENSIONS = YaCyServices.crawler.getSourceQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.crawler.getSourceQueues().length - 1, 1};
     private static int[] LOADER_PRIORITY_DIMENSIONS = YaCyServices.loader.getSourceQueues().length == 1 ? new int[] {1, 0} : new int[] {YaCyServices.loader.getSourceQueues().length - 1, 1};
