@@ -70,7 +70,7 @@ public class CrawlerDefaultValuesService extends ObjectAPIHandler implements API
         defaultValues.put("collection", "user"); // corpus name
         defaultValues.put("agentName", "");
         defaultValues.put("priority", 0);
-        defaultValues.put("loaderHeadless", "true");
+        defaultValues.put("loaderHeadless", "false");
         defaultValues.put("userId", User.ANONYMOUS_ID);
         defaultValues.put("storeAssets", "false");
         defaultValues.put("archiveWARC", "false");
