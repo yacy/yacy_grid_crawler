@@ -6,13 +6,13 @@
 # curl http://localhost:8300/yacy/grid/mcp/info/status.json
 
 # build app
-FROM adoptopenjdk/openjdk8:alpine AS appbuilder
+FROM eclipse-temurin:8-jdk-alpine AS appbuilder
 COPY ./ /app
 WORKDIR /app
 RUN ./gradlew assemble
 
 # build dist
-FROM adoptopenjdk/openjdk8:alpine
+FROM eclipse-temurin:8-jre-alpine
 LABEL maintainer="Michael Peter Christen <mc@yacy.net>"
 ENV DEBIAN_FRONTEND noninteractive
 ARG default_branch=master
