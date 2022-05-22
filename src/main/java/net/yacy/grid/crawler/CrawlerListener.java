@@ -429,7 +429,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     }
 
                     // create partitions
-                    final List<JSONArray> partitions = createPartition(indexNoIndex[ini], 4);
+                    final List<JSONArray> partitions = createPartition(indexNoIndex[ini], 8);
 
                     // create follow-up crawl to next depth
                     for (int pc = 0; pc < partitions.size(); pc++) {
@@ -519,7 +519,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         // create file names for the assets: this uses depth and partition information
         final SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US); // we must create this here to prevent concurrency bugs which are there in the date formatter :((
         final String basepath  = "/data/aaaaa/accounting/" + userId + "/";
-        final String docname  = "d" + intf(depth) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition);
+        final String docname  = "d" + intf(depth, 2) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition, 4);
         final String warcasset  =  basepath + "warc/"  + id + "/" + docname + ".warc.gz";
         final String indexasset =  basepath + "index/" + id + "/" + docname + ".index.jsonlist";
         final String graphasset =  basepath + "graph/" + id + "/" + docname + ".graph.jsonlist";
@@ -583,9 +583,9 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         return loaderAction;
     }
 
-    private final static String intf(final int i) {
+    private final static String intf(final int i, final int len) {
        String s = Integer.toString(i);
-       while (s.length() < 3) s = '0' + s;
+       while (s.length() < len) s = '0' + s;
        return s;
     }
 
