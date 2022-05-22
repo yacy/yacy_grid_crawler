@@ -1,0 +1,9 @@
+.git
+.gitignore
+data
+build
+bin
+docker
+Dockerfile
+LICENSE.md
+README.md
