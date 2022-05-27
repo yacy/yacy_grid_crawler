@@ -9,7 +9,7 @@
 FROM eclipse-temurin:8-jdk-alpine AS appbuilder
 COPY ./ /app
 WORKDIR /app
-RUN ./gradlew assemble
+RUN ./gradlew clean shadowDistTar
 
 # build dist
 FROM eclipse-temurin:8-jre-alpine
@@ -20,4 +20,8 @@ COPY ./conf /app/conf/
 COPY --from=appbuilder /app/build/libs/ ./app/build/libs/
 WORKDIR /app
 EXPOSE 8300
+
+# for some weird reason the jar file is sometimes not named correctly
+RUN if [ -e /app/build/libs/app-0.0.1-SNAPSHOT-all.jar ] ; then mv /app/build/libs/app-0.0.1-SNAPSHOT-all.jar /app/build/libs/yacy_grid_crawler-0.0.1-SNAPSHOT-all.jar; fi
+
 CMD ["java", "-jar", "/app/build/libs/yacy_grid_crawler-0.0.1-SNAPSHOT-all.jar"]
