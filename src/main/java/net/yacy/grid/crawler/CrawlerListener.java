@@ -209,13 +209,14 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     @Override
     public ActionResult processAction(final SusiAction crawlaction, final JSONArray data, final String processName, final int processNumber) {
         doDoubleCleanup();
-        final String crawlID = crawlaction.getStringAttr("id");
-        String userId = crawlaction.getStringAttr("userId"); if (userId == null || userId.length() == 0) userId = User.ANONYMOUS_ID;
-        if (crawlID == null || crawlID.length() == 0) {
+        final String crawl_id = crawlaction.getStringAttr("id");
+        String user_id = crawlaction.getStringAttr("user_id");
+        if (user_id == null || user_id.length() == 0) user_id = User.ANONYMOUS_ID;
+        if (crawl_id == null || crawl_id.length() == 0) {
             Logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
             return ActionResult.FAIL_IRREVERSIBLE;
         }
-        final JSONObject crawl = SusiThought.selectData(data, "id", crawlID);
+        final JSONObject crawl = SusiThought.selectData(data, "id", crawl_id);
         if (crawl == null) {
             Logger.info(this.getClass(), "Crawler.processAction Fail: ID of Action not found in data: " + crawlaction.toString());
             return ActionResult.FAIL_IRREVERSIBLE;
@@ -231,7 +232,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         // check depth (this check should be deprecated because we limit by omitting the crawl message at crawl tree leaves)
         if (depth > crawlingDepth) {
             // this is a leaf in the crawl tree (it does not mean that the crawl is finished)
-            Logger.info(this.getClass(), "Crawler.processAction Leaf: reached a crawl leaf for crawl " + crawlID + ", depth = " + crawlingDepth);
+            Logger.info(this.getClass(), "Crawler.processAction Leaf: reached a crawl leaf for crawl " + crawl_id + ", depth = " + crawlingDepth);
             return ActionResult.SUCCESS;
         }
         final boolean isCrawlLeaf = depth == crawlingDepth;
@@ -310,18 +311,18 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 // sort out doubles and apply filters
                 DoubleCache doublecache = null;
                 if (this.config.hazelcast == null) {
-                    if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
-                    doublecache = this.doubles.get(crawlID);
+                    if (!this.doubles.containsKey(crawl_id)) this.doubles.put(crawl_id, new DoubleCache());
+                    doublecache = this.doubles.get(crawl_id);
                 } else {
                     try {
                         final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
-                        if (!hazeldoubles.containsKey(crawlID)) hazeldoubles.put(crawlID, new DoubleCache());
-                        doublecache = hazeldoubles.get(crawlID);
+                        if (!hazeldoubles.containsKey(crawl_id)) hazeldoubles.put(crawl_id, new DoubleCache());
+                        doublecache = hazeldoubles.get(crawl_id);
                     } catch (final HazelcastException e) {
                         Logger.error(e);
                         this.config.hazelcast = null; // <VADER>DON'T FAIL ME AGAIN!</VADER>
-                        if (!this.doubles.containsKey(crawlID)) this.doubles.put(crawlID, new DoubleCache());
-                        doublecache = this.doubles.get(crawlID);
+                        if (!this.doubles.containsKey(crawl_id)) this.doubles.put(crawl_id, new DoubleCache());
+                        doublecache = this.doubles.get(crawl_id);
                     }
                 }
                 Logger.info(this.getClass(), "Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
@@ -342,8 +343,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
 
                         // create new crawl status document
                         final CrawlerDocument crawlStatus = new CrawlerDocument()
-                                .setCrawlID(crawlID)
-                                .setUserlID(userId)
+                                .setCrawlID(crawl_id)
+                                .setUserlID(user_id)
                                 .setMustmatch(mustmatchs)
                                 .setCollections(collections.keySet())
                                 .setCrawlstartURL(start_url)
@@ -414,8 +415,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     // create crawler index entries
                     for (final String u: indexNoIndex[ini]) {
                         final CrawlerDocument crawlStatus = new CrawlerDocument()
-                            .setCrawlID(crawlID)
-                            .setUserlID(userId)
+                            .setCrawlID(crawl_id)
+                            .setUserlID(user_id)
                             .setMustmatch(mustmatchs)
                             .setCollections(collections.keySet())
                             .setCrawlstartURL(start_url)
@@ -434,7 +435,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     // create follow-up crawl to next depth
                     for (int pc = 0; pc < partitions.size(); pc++) {
                         final JSONObject loaderAction = newLoaderAction(
-                        		priority, crawlID, userId, partitions.get(pc), depth, isCrawlLeaf,
+                        		priority, crawl_id, user_id, partitions.get(pc), depth, isCrawlLeaf,
                         		0, timestamp + ini, pc, depth < crawlingDepth, ini == 0,
                         		archiveWARC, archiveIndex, archiveGraph); // action includes whole hierarchy of follow-up actions
                         final SusiThought nextjson = new SusiThought()
@@ -504,7 +505,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     private JSONObject newLoaderAction(
             final int priority,
             final String id,
-            final String userId,
+            final String user_id,
             final JSONArray urls,
             final int depth,
             final boolean isCrawlLeaf,
@@ -518,7 +519,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             final boolean archiveGraph) throws IOException {
         // create file names for the assets: this uses depth and partition information
         final SimpleDateFormat FORMAT_TIMEF = new SimpleDateFormat(PATTERN_TIMEF, Locale.US); // we must create this here to prevent concurrency bugs which are there in the date formatter :((
-        final String basepath  = "/data/aaaaa/accounting/" + userId + "/";
+        final String basepath  = "/data/aaaaa/accounting/" + user_id + "/";
         final String docname  = "d" + intf(depth, 2) + "-t" + FORMAT_TIMEF.format(new Date(timestamp)) + "-p" + intf(partition, 4);
         final String warcasset  =  basepath + "warc/"  + id + "/" + docname + ".warc.gz";
         final String indexasset =  basepath + "index/" + id + "/" + docname + ".index.jsonlist";
@@ -536,7 +537,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("type", YaCyServices.indexer.name())
                 .put("queue", indexerQueueName.name())
                 .put("id", id)
-                .put("user_id", userId)
+                .put("user_id", user_id)
                 .put("sourceasset", indexasset)
                 .put("archiveindex", archiveIndex)
              );
@@ -548,7 +549,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("type", YaCyServices.crawler.name())
                 .put("queue", crawlerQueueName.name())
                 .put("id", id)
-                .put("user_id", userId)
+                .put("user_id", user_id)
                 .put("depth", depth + 1)
                 .put("sourcegraph", graphasset)
                 .put("archivegraph", archiveGraph)
@@ -561,6 +562,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("type", YaCyServices.parser.name())
                 .put("queue", parserQueueName.name())
                 .put("id", id)
+                .put("user_id", user_id)
                 .put("sourceasset", warcasset)
                 .put("targetasset", indexasset)
                 .put("targetgraph", graphasset)
@@ -575,7 +577,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             .put("type", YaCyServices.loader.name())
             .put("queue", loaderQueueName.name())
             .put("id", id)
-            .put("user_id", userId)
+            .put("user_id", user_id)
             .put("urls", urls)
             .put("targetasset", warcasset)
             .put("archivewarc", archiveWARC)
