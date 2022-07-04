@@ -212,6 +212,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         final String crawl_id = crawlaction.getStringAttr("id");
         String user_id = crawlaction.getStringAttr("user_id");
         if (user_id == null || user_id.length() == 0) user_id = User.ANONYMOUS_ID;
+        JSONArray user_ids = crawlaction.getArrayAttr("user_ids");
+        if (user_ids == null) user_ids = new JSONArray();
+        if (user_id != null && user_id.length() > 0 && !user_ids.toList().contains(user_id)) user_ids.put(user_id);
+
         if (crawl_id == null || crawl_id.length() == 0) {
             Logger.info("Crawler.processAction Fail: Action does not have an id: " + crawlaction.toString());
             return ActionResult.FAIL_IRREVERSIBLE;
@@ -435,9 +439,9 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     // create follow-up crawl to next depth
                     for (int pc = 0; pc < partitions.size(); pc++) {
                         final JSONObject loaderAction = newLoaderAction(
-                        		priority, crawl_id, user_id, partitions.get(pc), depth, isCrawlLeaf,
-                        		0, timestamp + ini, pc, depth < crawlingDepth, ini == 0,
-                        		archiveWARC, archiveIndex, archiveGraph); // action includes whole hierarchy of follow-up actions
+                                priority, crawl_id, user_id, user_ids, partitions.get(pc), depth, isCrawlLeaf,
+                                0, timestamp + ini, pc, depth < crawlingDepth, ini == 0,
+                                archiveWARC, archiveIndex, archiveGraph); // action includes whole hierarchy of follow-up actions
                         final SusiThought nextjson = new SusiThought()
                                 .setData(data)
                                 .addAction(new SusiAction(loaderAction));
@@ -491,7 +495,10 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
     /**
      * Create a new loader action. This action contains all follow-up actions after
      * loading to create a steering of parser, indexing and follow-up crawler actions.
+     * @param priority the prioroty of the crawl
      * @param id the crawl id
+     * @param user_id the id of the user (9 digit number)
+     * @param user_ids all users which have that domin as crawl assigned
      * @param urls the urls which are part of the same actions
      * @param depth the depth of the crawl step (0 is start depth)
      * @param retry the number of load re-tries (0 is no retry, shows that this is the first attempt)
@@ -506,6 +513,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             final int priority,
             final String id,
             final String user_id,
+            final JSONArray user_ids,
             final JSONArray urls,
             final int depth,
             final boolean isCrawlLeaf,
@@ -538,6 +546,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("queue", indexerQueueName.name())
                 .put("id", id)
                 .put("user_id", user_id)
+                .put("user_ids", user_ids)
                 .put("sourceasset", indexasset)
                 .put("archiveindex", archiveIndex)
              );
@@ -550,6 +559,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("queue", crawlerQueueName.name())
                 .put("id", id)
                 .put("user_id", user_id)
+                .put("user_ids", user_ids)
                 .put("depth", depth + 1)
                 .put("sourcegraph", graphasset)
                 .put("archivegraph", archiveGraph)
@@ -563,6 +573,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                 .put("queue", parserQueueName.name())
                 .put("id", id)
                 .put("user_id", user_id)
+                .put("user_ids", user_ids)
                 .put("sourceasset", warcasset)
                 .put("targetasset", indexasset)
                 .put("targetgraph", graphasset)
@@ -578,6 +589,7 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             .put("queue", loaderQueueName.name())
             .put("id", id)
             .put("user_id", user_id)
+            .put("user_ids", user_ids)
             .put("urls", urls)
             .put("targetasset", warcasset)
             .put("archivewarc", archiveWARC)
