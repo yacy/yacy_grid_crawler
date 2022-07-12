@@ -126,7 +126,6 @@ public class Crawler {
 
         // first greeting
         Logger.info("YaCy Grid Crawler started!");
-        Logger.info(new GitTool().toString());
 
         // run application with cron
         final long cycleDelay = Long.parseLong(System.getProperty("YACYGRID_CRAWLER_CYCLEDELAY", "" + Long.MAX_VALUE)); // by default, run only in one genesis thread
