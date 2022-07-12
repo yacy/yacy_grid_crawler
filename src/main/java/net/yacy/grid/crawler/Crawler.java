@@ -34,7 +34,6 @@ import net.yacy.grid.mcp.MCP;
 import net.yacy.grid.mcp.Service;
 import net.yacy.grid.tools.CronBox;
 import net.yacy.grid.tools.CronBox.Telemetry;
-import net.yacy.grid.tools.GitTool;
 import net.yacy.grid.tools.Logger;
 
 /**
@@ -65,7 +64,6 @@ public class Crawler {
 
         public Application() {
             Logger.info("Starting Crawler Application...");
-            Logger.info(new GitTool().toString());
 
             // initialize configuration
             final List<Class<? extends Servlet>> services = new ArrayList<>();
