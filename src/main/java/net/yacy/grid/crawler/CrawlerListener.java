@@ -23,8 +23,6 @@ import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import com.hazelcast.core.HazelcastException;
-
 import ai.susi.mind.SusiAction;
 import ai.susi.mind.SusiThought;
 import net.yacy.grid.Services;
@@ -99,28 +97,12 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         final long now = System.currentTimeMillis();
         if (now - doublesLastCleanup < doublesCleanupPeriod) return;
         doublesLastCleanup = now;
-        Iterator<Map.Entry<String, DoubleCache>> i = this.doubles.entrySet().iterator();
+        final Iterator<Map.Entry<String, DoubleCache>> i = this.doubles.entrySet().iterator();
         while (i.hasNext()) {
             final Map.Entry<String, DoubleCache> cache = i.next();
             if ((now - cache.getValue().time) > doublesCleanupTimeout) {
                 cache.getValue().doubleHashes.clear();
                 i.remove();
-            }
-        }
-        if (this.config.hazelcast != null) {
-            try {
-                final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
-                i = hazeldoubles.entrySet().iterator();
-                while (i.hasNext()) {
-                    final Map.Entry<String, DoubleCache> cache = i.next();
-                    if ((now - cache.getValue().time) > doublesCleanupTimeout) {
-                        cache.getValue().doubleHashes.clear();
-                        i.remove();
-                    }
-                }
-            } catch (final HazelcastException e) {
-                Logger.error(e);
-                this.config.hazelcast = null; // <VADER>DON'T FAIL ME AGAIN!</VADER>
             }
         }
     }
@@ -314,21 +296,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
 
                 // sort out doubles and apply filters
                 DoubleCache doublecache = null;
-                if (this.config.hazelcast == null) {
-                    if (!this.doubles.containsKey(crawl_id)) this.doubles.put(crawl_id, new DoubleCache());
-                    doublecache = this.doubles.get(crawl_id);
-                } else {
-                    try {
-                        final Map<String, DoubleCache> hazeldoubles = this.config.hazelcast.getMap("doubles");
-                        if (!hazeldoubles.containsKey(crawl_id)) hazeldoubles.put(crawl_id, new DoubleCache());
-                        doublecache = hazeldoubles.get(crawl_id);
-                    } catch (final HazelcastException e) {
-                        Logger.error(e);
-                        this.config.hazelcast = null; // <VADER>DON'T FAIL ME AGAIN!</VADER>
-                        if (!this.doubles.containsKey(crawl_id)) this.doubles.put(crawl_id, new DoubleCache());
-                        doublecache = this.doubles.get(crawl_id);
-                    }
-                }
+                if (!this.doubles.containsKey(crawl_id)) this.doubles.put(crawl_id, new DoubleCache());
+                doublecache = this.doubles.get(crawl_id);
                 Logger.info(this.getClass(), "Crawler.processAction processing sub-graph with " + graph.size() + " urls for url " + sourceurl);
                 urlcheck: for (final MultiProtocolURL url: graph) {
                     // prepare status document
@@ -360,8 +329,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         // check matcher rules
                         if (!mustmatch.matcher(u).matches() || mustnotmatch.matcher(u).matches()) {
                             crawlStatus
-                                .setStatus(Status.rejected)
-                                .setComment(!mustmatch.matcher(u).matches() ? "url does not match must-match filter " + mustmatchs : "url matches mustnotmatch filter " + mustnotmatchs);
+                            .setStatus(Status.rejected)
+                            .setComment(!mustmatch.matcher(u).matches() ? "url does not match must-match filter " + mustmatchs : "url matches mustnotmatch filter " + mustnotmatchs);
                             crawlerDocuments.add(crawlStatus);
                             continue urlcheck;
                         }
@@ -371,8 +340,8 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                         if (blacklistInfo != null) {
                             Logger.info(this.getClass(), "Crawler.processAction crawler blacklist pattern '" + blacklistInfo.matcher.pattern().toString() + "' removed url '" + u + "' from crawl list " + blacklistInfo.source + ":  " + blacklistInfo.info);
                             crawlStatus
-                                .setStatus(Status.rejected)
-                                .setComment("url matches blacklist");
+                            .setStatus(Status.rejected)
+                            .setComment("url matches blacklist");
                             crawlerDocuments.add(crawlStatus);
                             continue urlcheck;
                         }
@@ -419,17 +388,17 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
                     // create crawler index entries
                     for (final String u: indexNoIndex[ini]) {
                         final CrawlerDocument crawlStatus = new CrawlerDocument()
-                            .setCrawlID(crawl_id)
-                            .setUserlID(user_id)
-                            .setMustmatch(mustmatchs)
-                            .setCollections(collections.keySet())
-                            .setCrawlstartURL(start_url)
-                            .setCrawlstartSSLD(start_ssld)
-                            .setInitDate(now)
-                            .setStatusDate(now)
-                            .setStatus(Status.accepted)
-                            .setURL(u)
-                            .setComment(ini == 0 ? "to be indexed" : "noindex, just for crawling");
+                                .setCrawlID(crawl_id)
+                                .setUserlID(user_id)
+                                .setMustmatch(mustmatchs)
+                                .setCollections(collections.keySet())
+                                .setCrawlstartURL(start_url)
+                                .setCrawlstartSSLD(start_ssld)
+                                .setInitDate(now)
+                                .setStatusDate(now)
+                                .setStatus(Status.accepted)
+                                .setURL(u)
+                                .setComment(ini == 0 ? "to be indexed" : "noindex, just for crawling");
                         crawlerDocuments.add(crawlStatus);
                     }
 
@@ -463,12 +432,12 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
             final Map<String, CrawlerDocument> crawlerDocumentsMap = new HashMap<>();
             crawlerDocuments.forEach(crawlerDocument -> {
                 final String url = crawlerDocument.getURL();
-                    if (url != null && url.length() > 0) {
-                        final String id = Digest.encodeMD5Hex(url);
-                        crawlerDocumentsMap.put(id, crawlerDocument);
-                    } else {
-                        assert false : "url not set / storeBulk";
-                    }
+                if (url != null && url.length() > 0) {
+                    final String id = Digest.encodeMD5Hex(url);
+                    crawlerDocumentsMap.put(id, crawlerDocument);
+                } else {
+                    assert false : "url not set / storeBulk";
+                }
             });
             CrawlerDocument.storeBulk(super.config, super.config.gridIndex, crawlerDocumentsMap);
             Logger.info(this.getClass(), "Crawler.processAction processed graph with " +  jsonlist.length()/2 + " subgraphs from " + sourcegraph);
@@ -542,28 +511,28 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         if (doIndexing) {
             final GridQueue indexerQueueName = super.config.gridBroker.queueName(YaCyServices.indexer, YaCyServices.indexer.getSourceQueues(), ShardingMethod.LEAST_FILLED, INDEXER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
-                .put("type", YaCyServices.indexer.name())
-                .put("queue", indexerQueueName.name())
-                .put("id", id)
-                .put("user_id", user_id)
-                .put("user_ids", user_ids)
-                .put("sourceasset", indexasset)
-                .put("archiveindex", archiveIndex)
-             );
+                    .put("type", YaCyServices.indexer.name())
+                    .put("queue", indexerQueueName.name())
+                    .put("id", id)
+                    .put("user_id", user_id)
+                    .put("user_ids", user_ids)
+                    .put("sourceasset", indexasset)
+                    .put("archiveindex", archiveIndex)
+                    );
         }
         // if all of the urls shall be crawled at depth + 1, add a crawling action. Don't do this only if the crawling depth is at the depth limit.
         if (doCrawling) {
             final GridQueue crawlerQueueName = super.config.gridBroker.queueName(YaCyServices.crawler, YaCyServices.crawler.getSourceQueues(), ShardingMethod.LEAST_FILLED, CRAWLER_PRIORITY_DIMENSIONS, priority, hashKey);
             postParserActions.put(new JSONObject(true)
-                .put("type", YaCyServices.crawler.name())
-                .put("queue", crawlerQueueName.name())
-                .put("id", id)
-                .put("user_id", user_id)
-                .put("user_ids", user_ids)
-                .put("depth", depth + 1)
-                .put("sourcegraph", graphasset)
-                .put("archivegraph", archiveGraph)
-             );
+                    .put("type", YaCyServices.crawler.name())
+                    .put("queue", crawlerQueueName.name())
+                    .put("id", id)
+                    .put("user_id", user_id)
+                    .put("user_ids", user_ids)
+                    .put("depth", depth + 1)
+                    .put("sourcegraph", graphasset)
+                    .put("archivegraph", archiveGraph)
+                    );
         }
 
         // before that and after loading we have a parsing action
@@ -585,22 +554,22 @@ public class CrawlerListener extends AbstractBrokerListener implements BrokerLis
         // at the beginning of the process, we do a loading.
         final GridQueue loaderQueueName = super.config.gridBroker.queueName(YaCyServices.loader, YaCyServices.loader.getSourceQueues(), isCrawlLeaf ? ShardingMethod.LEAST_FILLED : ShardingMethod.BALANCE, LOADER_PRIORITY_DIMENSIONS, priority, hashKey);
         final JSONObject loaderAction = new JSONObject(true)
-            .put("type", YaCyServices.loader.name())
-            .put("queue", loaderQueueName.name())
-            .put("id", id)
-            .put("user_id", user_id)
-            .put("user_ids", user_ids)
-            .put("urls", urls)
-            .put("targetasset", warcasset)
-            .put("archivewarc", archiveWARC)
-            .put("actions", parserActions); // actions after loading
+                .put("type", YaCyServices.loader.name())
+                .put("queue", loaderQueueName.name())
+                .put("id", id)
+                .put("user_id", user_id)
+                .put("user_ids", user_ids)
+                .put("urls", urls)
+                .put("targetasset", warcasset)
+                .put("archivewarc", archiveWARC)
+                .put("actions", parserActions); // actions after loading
         return loaderAction;
     }
 
     private final static String intf(final int i, final int len) {
-       String s = Integer.toString(i);
-       while (s.length() < len) s = '0' + s;
-       return s;
+        String s = Integer.toString(i);
+        while (s.length() < len) s = '0' + s;
+        return s;
     }
 
     @Override
