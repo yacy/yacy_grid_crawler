@@ -29,6 +29,8 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 tasks.withType(JavaCompile) {
+    sourceCompatibility = 8
+    targetCompatibility = 8
     options.encoding = 'UTF-8'
 }
 
@@ -55,7 +57,7 @@ dependencies {
     implementation 'org.apache.httpcomponents:httpmime:4.+'
     implementation 'org.eclipse.jetty:jetty-server:9.4.+'
     implementation 'org.eclipse.jetty:jetty-servlet:9.4.+'
-    implementation 'org.eclipse.jgit:org.eclipse.jgit:5.+'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.3.+'
     implementation 'org.elasticsearch.client:transport:6.8.+'
     implementation 'org.mapdb:mapdb:3.0.+'
     implementation 'org.slf4j:log4j-over-slf4j:2.0.+'
